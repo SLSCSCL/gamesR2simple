@@ -1,3 +1,6 @@
+"""
+A very simple game demonstratig the use of gamesR2simple.areas.Area
+"""
 from gamesR2simple import BaseGame, keys
 from gamesR2simple.areas import Area, Lines, Line
 
@@ -25,3 +28,4 @@ class Game(BaseGame):
 
 if __name__ == "__main__":
     game = Game()
+
