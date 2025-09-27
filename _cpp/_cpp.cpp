@@ -3,9 +3,10 @@
 #include <SDL3/SDL_main.h>
 
 #include "KeyCodes.h"
-#include "Window.h"
+#include "common.h"
 
 #include <random>
+namespace py = pybind11;
 using namespace std;
 
 auto sdlAttr = SDL_INIT_VIDEO;
@@ -35,6 +36,9 @@ void start() {
 
 int main(int, char**)
 {
+    /* the real main() that will be used after testing
+    
+    */
     if (!SDL_Init(sdlAttr)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
@@ -62,4 +66,35 @@ int main(int, char**)
 
     quit();
     return 0;
+}
+
+PYBIND11_MODULE(_cpp, m) {
+    py::module_ mod = m.def_submodule("window");
+
+    py::class_<Window>(mod, "Window")
+        .def(py::init<pybind11::str, int, int>())
+        .def("quit", &Window::quit)
+        //setter funcs
+        .def("setResizable", &Window::setResizable)
+        .def("setMinimized", &Window::setMinimized)
+        .def("setMaximized", &Window::setMaximized)
+        //size funcs
+        .def("resize", &Window::resize)
+        .def("getSize", &Window::getSize)
+        //drawing funcs
+        .def("setColor", &Window::setColor)
+        .def("point", &Window::point)
+        .def("line", &Window::line)
+        .def("fillRect", &Window::fillRect)
+        .def("strokeRect", &Window::strokeRect)
+        .def("clear", &Window::clear)
+        .def("show", &Window::show)
+        .def_readwrite("id", &Window::id);
+
+    mod = m.def_submodule("keys");
+
+    mod = m.def_submodule("events");
+    using weh = WindowEventHandler;
+    py::class_<weh>(mod, "WinEvents")
+        .def("add_mouse_event", &weh::addME);
 }

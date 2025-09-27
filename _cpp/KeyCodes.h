@@ -1,9 +1,11 @@
 #pragma once
-#include "SDL3/SDL.h"
-#include "pybind11/typing.h"
-using pybind11::str;
-using pybind11::typing::Dict;
+#include <SDL3/SDL.h>
+#include <pybind11/typing.h>
+#define INIT
 
-Dict<str, int> keys;
+
+
+extern pybind11::typing::Dict<pybind11::str, int> keys;
+extern bool created;
 
 void initKeys();
