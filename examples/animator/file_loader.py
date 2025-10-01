@@ -1,61 +1,97 @@
-from tkinter.filedialog import askopenfilename, asksaveasfilename
+from gamesR2simple import q
+from gamesR2simple.areas import *
+
+from tkinter.filedialog import (
+    askopenfilename,
+    asksaveasfile
+)
+
+__all__ = [
+    "CodecError",
+    "Project",
+    "load_project",
+    "save_project_as",
+    "save_project"
+]
+
+class CodecError(Exception):
+    pass
 
 class Project:
-    def __init__(self, fps, *frames, **vars_):
+    """Contains an entire project in string values"""
+    def __init__(self, name, fps, *frames):
+        self.name = name
         self.fps = fps
         self.frames = frames
-        self.vars_ = vars_
+        self.f_num = len(frames)
 
-def open_project():
-    with open("p.txt") as f:
-        direct = f.readline()
-        if direct != "":
-            name = direct
-        else:
-            name = askopenfilename(title="Open Project", initialdir="/")
-    
-    with askopenfilename(title="Open Project", initialdir="/") as f:
-        """
-        File format:
-            fps60
+    def stream(self):
+        """Stream the project"""
+        f = []
+        for frame in self.frames:
+            f = []
+            for obj in frame:
+                f.append(eval(obj)) #convert the frame from string to object
+            yield f #YIELD the frame - we need to go through each frame!
+        #the project should be successfully completed
 
-            #whitespace is only for ease on the eye
-            vars:
-                r1=rect(10, 10, 100, 100)
-                p1=point(175, 32)
-            frame1:
-                r1
-                p1
-            frame2:
-                r1>(5, 2)
-            #the frames go on...
+def load_project(self):
+    """Loads a project according to this file format:
+        fps60
 
-            end
-        """
+        #whitespace is only for ease on the eye
+        frame
+            RectArea(10, 10, 100, 100)
+            Point(175, 32)
+        frame
+            RectArea(15, 12, 100, 100)
+        #the frames go on...
+
+        end
+    """
+    name = askopenfilename(title="Open Project", initialdir="/",
+                           filetypes=[("Animation Project", "*.animproj")])
+    with open(name) as f:
         fps = f.readline().replace(" ", "")[3:] #get the fps
-        cur_sect = ""
-        cur_frame = 0
+        in_frames = False
         frames = []
-        _vars = {}
+        cur_line = 1
+        no_f = ""
         while True:
-            line = f.readline().replace(" ", "")
+            cur_line += 1
+            no_f = f.readline()
+            line = no_f.replace(" ", "")
+            
             if line == "" or line[0] == "#":
                 continue
-            elif line[:3] == "end":
+            elif line == "end":
                 break
-            elif line[:4] == "vars":
-                cur_sect = "vars"
-                continue
             elif line[:5] == "frame":
-                cur_sect = "frame"
-                cur_frame += 1
+                in_frames = True
                 frames.append([])
                 continue
+            else:
+                raise CodecError(
+                    "The formatting of the file is not correct on line " +
+                    cur_line + ": " + no_f
+                )
 
-            if cur_sect == "vars":
-                pass
-            elif cur_sect == "frame":
-                pass
-    return Project(fps, *frames, **vars_)
+            if in_frames:
+                try:
+                    if "#" in line:
+                        line = line.split()
+                        while "#" in line:
+                            line.pop()
+                        line = ''.join(line)
+                    froames[-1].append(line)
+                except MemoryError:
+                    q()
+                    print("Not enough memory to load the project")
+        
+    return Project(name, fps, *frames)
 
-open_project()
+def save_project_as(proj):
+    pass
+
+def save_project(proj):
+    pass
