@@ -1,14 +1,17 @@
 #pragma once
-#ifndef WINDOW_
-#define WINDOW_
 #include <assert.h>
 #include <map>
+#include <memory>
 #include <vector>
 #include <Python.h>
 #include <pybind11/typing.h>
+#include <pybind11/pybind11.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
+#include "Combinations.h"
 #include "KeyCodes.h"
+using namespace std;
+namespace py = pybind11;
 
 enum class MouseEvents {
 	MOUSE_MOVE,
@@ -18,36 +21,38 @@ enum class MouseEvents {
 	WHL_CLICK,
 	L_DRAG,
 	R_DRAG,
-	WHL_DRAG
+	WHL_DRAG,
+	BACK_THUMB,
+	FWD_THUMB,
+	NONE //Only for use in common.cpp
 };
 enum class KeyEvents {
-	KEY_UP = 8,
+	KEY_UP,
 	KEY_DOWN,
 	KEY_HOLD
-};
-
-enum class EventType {
-	MOUSE,
-	KEY,
-	MOUSE_KEY,
-	KEY_KEY,
-	UTILITY_MOUSE,
-	UTILITY_KEY,
-	UTILITY_MOUSE_KEY,
-	UTILITY_KEY_KEY,
 };
 
 class Window;
 extern std::vector<Window*> windows;
 
+class WindowEventHandler;
+
+using mouse = map<MouseEvents, py::function>;
+using key = map<SDL_Keycode, py::function>;
+using combos = vector<Combination>;
+
 class WindowEventHandler {
 private:
 	Window* win;
 public:
+	shared_ptr<mouse> mousedown, umousedown, mousedrag, umousedrag;
+	shared_ptr<key> keydown, keyhold, quit;
+	shared_ptr<combos> keycombos, mousekeycombos;
+
 	WindowEventHandler(Window* _win);
 
-	void addME(MouseEvents type, PyFunctionObject& callback);
-	void addKE(KeyEvents type, int key, PyFunctionObject& callback);
+	void addME(MouseEvents type, py::function callback, bool utility = false);
+	void addKE(KeyEvents type, int key, py::function callback);
 };
 
 
@@ -61,20 +66,21 @@ private:
 	int width, height, attr = 0;
 
 public:
-	Uint32 id;
+	SDL_WindowID id;
 
 	template<typename... Args>
 	Window(Args... args) {}
 	Window(const char* name_, int width_, int height_);
 	~Window();
-	void quit();
+	void destroy();
 
 	void setResizable(bool set);
 	void setMinimized(bool set);
 	void setMaximized(bool set);
 
 	void resize(int newW, int newH);
-	void getSize(int& width, int& height);
+	void getSize(int* width, int* height);
+	py::tuple getSize();
 
 	void setColor(int r, int g, int b, int a = 255);
 	void point(int x, int y);
@@ -84,38 +90,35 @@ public:
 
 	void clear();
 	void show();
+
+	WindowEventHandler* getHandle();
 };
 
 void quit();
 
-class WindowEventHandler;
-
-class Event {
-public:
-	int event;
-	Window* win;
-	WindowEventHandler* handler;
-	PyFunctionObject& callback;
-
-	Event(Window* w, WindowEventHandler* h, MouseEvents e, PyFunctionObject& c);
-	Event(Window* w, WindowEventHandler* h, KeyEvents e, PyFunctionObject& c);
+enum class MouseBtns {
+	LEFT,
+	RIGHT,
+	WHL,
+	BACK_THUMB,
+	FWD_THUMB
 };
-
-using vec = std::vector<Event>;
 
 class Events {
 private:
-	std::map<EventType, vec> events{};
+	map<MouseBtns, bool> pressedBtns;
 
 	static Events* self;
 
-	static void checkMD(vec* events, Uint32 id);
+	static void checkMD(WindowEventHandler* handler, float x, float y, Uint8 btn);
+	static void checkKD(WindowEventHandler* handler, SDL_Keycode key);
+	static void checkKH(WindowEventHandler* handler);
 public:
 	Events();
-	static void add(EventType type, Event e);
 
 	static void checkEvents();
 };
 
+extern std::vector<py::function> updateFuncs;
 
-#endif
+void update();

@@ -1,8 +1,9 @@
+#include <pybind11/embed.h>
+#include <pybind11/native_enum.h>
 #include <pybind11/pybind11.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-#include "KeyCodes.h"
 #include "common.h"
 
 #include <random>
@@ -24,7 +25,6 @@ void useAudio() {
 }
 
 void start() {
-    initKeys();
     int count = 0;
     while (!SDL_Init(sdlAttr)) {
         count++;
@@ -36,23 +36,18 @@ void start() {
 
 int main(int, char**)
 {
-    /* the real main() that will be used after testing
-    
-    */
     if (!SDL_Init(sdlAttr)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
     }
+    
+	py::scoped_interpreter guard{};
 
-    Window win{"Hello", 800, 400};
+    Window win("Hello", 800, 400);
 
     // Clear to black and draw a single white point at center
     int w, h;
-    win.getSize(w, h);
-    win.clear();
-    win.setColor(255, 255, 255);
-    win.point(w / 2, h / 2);
-    win.show();
+    win.setMaximized(true);
 
     // Sit in a tiny loop until window close
     bool running = true;
@@ -62,6 +57,13 @@ int main(int, char**)
             if (e.type == SDL_EVENT_QUIT) running = false;
         }
         SDL_Delay(10);
+
+        win.getSize(&w, &h);
+        win.setColor(0, 0, 0);
+        win.clear();
+        win.setColor(255, 255, 255);
+        win.point(w / 2, h / 2);
+        win.show();
     }
 
     quit();
@@ -69,18 +71,18 @@ int main(int, char**)
 }
 
 PYBIND11_MODULE(_cpp, m) {
-    py::module_ mod = m.def_submodule("window");
+    m.add_object("keys", getKeys());
 
-    py::class_<Window>(mod, "Window")
+    py::class_<Window>(m, "Window")
         .def(py::init<pybind11::str, int, int>())
-        .def("quit", &Window::quit)
+        .def("destroy", &Window::destroy)
         //setter funcs
         .def("setResizable", &Window::setResizable)
         .def("setMinimized", &Window::setMinimized)
         .def("setMaximized", &Window::setMaximized)
         //size funcs
         .def("resize", &Window::resize)
-        .def("getSize", &Window::getSize)
+        .def("getSize", py::overload_cast<>(&Window::getSize))
         //drawing funcs
         .def("setColor", &Window::setColor)
         .def("point", &Window::point)
@@ -90,10 +92,44 @@ PYBIND11_MODULE(_cpp, m) {
         .def("clear", &Window::clear)
         .def("show", &Window::show)
         .def_readwrite("id", &Window::id);
+    m.def("quit", quit);
+    m.def("update", update);
 
-    mod = m.def_submodule("keys");
+    py::module mod = m.def_submodule("combos");
+
+    py::class_<Combination>(mod, "KeyCombination")
+        .def(py::init<Key, Key, py::function>())
+        .def(py::init<Key, Key, Key, py::function>());
+
+    py::class_<Combination>(mod, "MouseKeyCombination")
+        .def(py::init<Key, Key, py::function>())
+        .def(py::init<Key, Key, Key, py::function>());
 
     mod = m.def_submodule("events");
+
+    py::class_<Events>(mod, "Events")
+        .def(py::init<>())
+        .def("check_events", &Events::checkEvents);
+
+    py::native_enum<MouseEvents>(mod, "MouseEvents", "enum.Enum")
+        .value("L_CLICK", MouseEvents::L_CLICK)
+        .value("R_CLICK", MouseEvents::R_CLICK)
+        .value("WHL_CLICK", MouseEvents::WHL_CLICK)
+        .value("L_DRAG", MouseEvents::L_DRAG)
+        .value("R_DRAG", MouseEvents::R_DRAG)
+        .value("WHL_DRAG", MouseEvents::WHL_DRAG)
+        .value("MOUSEMOVE", MouseEvents::MOUSE_MOVE)
+        .value("MOUSEUP", MouseEvents::MOUSE_UP)
+        .export_values()
+        .finalize();
+
+    py::native_enum<KeyEvents>(mod, "KeyEvents", "enum.Enum")
+        .value("KEYDOWN", KeyEvents::KEY_DOWN)
+        .value("KEYUP", KeyEvents::KEY_UP)
+        .value("KEYHOLD", KeyEvents::KEY_HOLD)
+        .export_values()
+        .finalize();
+
     using weh = WindowEventHandler;
     py::class_<weh>(mod, "WinEvents")
         .def("add_mouse_event", &weh::addME);
