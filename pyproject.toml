@@ -1,3 +1,22 @@
 [build-system]
-requires = ["setuptools >= 77.0.3"]
+requires = ["setuptools >= 77.0.3, pybind11 >= 3.0.1"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "gamesR2simple_TheChosenOne96"
+version = "1.0"
+authors = [
+  { name="TheChosenOne96" },
+]
+description = "A small example package"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+repository = "https://github.com/TheChosenOne96/gamesR2simple/"
