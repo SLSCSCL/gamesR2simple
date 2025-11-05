@@ -9,6 +9,9 @@ public:
 	Key key1, key2, key3 = SDLK_UNKNOWN;
 	func callback;
 
+	Combination(Key k1, func c);
 	Combination(Key k1, Key k2, func c);
 	Combination(Key k1, Key k2, Key k3, func c);
+
+	void operator()();
 };
