@@ -1,0 +1,19 @@
+.codespace {
+    font-family: Cascadia Code, Cascadia Mono, Cascadia Code PL, Cascadia Mono PL, monospace;
+}
+
+.codespace span {
+    font-family: inherit;
+}
+
+.kwd {
+    color: orange;
+}
+
+.num {
+    color: lightblue;
+}
+
+.symbol {
+    color: #a04e00;
+}
