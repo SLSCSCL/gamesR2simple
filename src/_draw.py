@@ -5,7 +5,7 @@ class Draw:
         self.window = window
 
     def area(self, area):
-        if type(area) == RectArea:
+        if type(area) is RectArea:
             self.window.fill_rect(area.x, area.y, area.width, area.height)
         
         for point in area.points:
