@@ -1,6 +1,6 @@
 import sys
 
-from .._cpp.quit import q
+from .._cpp import quit
 
 from .._legends import pressed_btns
 from ._base_utilities import BaseClickableUtility, BaseScrollableUtility
