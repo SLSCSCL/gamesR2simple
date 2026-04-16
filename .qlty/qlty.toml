@@ -8,4 +8,4 @@ name = "default"
 default = true
 
 [smells.function_parameters]
-threshold = 4
+threshold = 5
