@@ -7,7 +7,7 @@ using std::function;
 NAMESPACE
 
 typedef function<void()> func;					   //regular function
-typedef function<void(pybind11::tuple)> mousecall; //mouse event callback
+typedef function<void(int, int)> mousecall; //mouse event callback
 
 class KeyCombination {
 public:
@@ -27,8 +27,9 @@ public:
 	mousecall callback;
 
 	MouseKeyCombination(int k, mousecall c);
+	MouseKeyCombination(int k, func c);
 
-	void operator()(pybind11::tuple coord);
+	void operator()(int x, int y);
 	bool operator==(MouseKeyCombination combo);
 };
 

@@ -1,22 +1,27 @@
+//#define CPP_TESTING
+
+#ifndef CPP_TESTING
+#define USING_PYBIND11
+#endif
+
 #include "gamesR2simple.h"
 using namespace gr2s;
 namespace py = pybind11;
 
-//#define CPP_TESTING
 
 #ifdef CPP_TESTING
 #include <iostream>
 #include <sstream>
 #include <SDL3/SDL_main.h>
 
-string getCoord(py::tuple coord) {
-    stringstream ss;
-    ss << "(" << coord[0].cast<int>() << ", " << coord[1].cast<int>() << ")";
+string getCoord(int x, int y) {
+    stringstream ss{};
+    ss << "(" << x << ", " << y << ")";
     return ss.str();
 }
 
-void mousedown(py::tuple coord) {
-    cout << "Mousedown at " << getCoord(coord) << "\n";
+void mousedown(int x, int y) {
+    cout << "Mousedown at " << getCoord(x, y) << "\n";
 }
 
 void keydownW() {
@@ -31,24 +36,24 @@ void ctrlC() {
     cout << "Copied!\n";
 }
 
-void deleteBlock(py::tuple coord) {
-    cout << "Block deleted at " << getCoord(coord) << "!\n";
+void deleteBlock(int x, int y) {
+    cout << "Block deleted at " << getCoord(x, y) << "!\n";
 }
 
 void mouseup() {
     cout << "Mouse up!\n";
 }
 
-void ldrag(py::tuple coord) {
-    cout << "Mouse is being l-dragged! Now at " << getCoord(coord) << "!\n";
+void ldrag(int x, int y) {
+    cout << "Mouse is being l-dragged! Now at " << getCoord(x, y) << "!\n";
 }
 
-void rdrag(py::tuple coord) {
-    cout << "Mouse is being r-dragged! Now at " << getCoord(coord) << "!\n";
+void rdrag(int x, int y) {
+    cout << "Mouse is being r-dragged! Now at " << getCoord(x, y) << "!\n";
 }
 
-void whldrag(py::tuple coord) {
-    cout << "Mouse is being whl-dragged! Now at " << getCoord(coord) << "!\n";
+void whldrag(int x, int y) {
+    cout << "Mouse is being whl-dragged! Now at " << getCoord(x, y) << "!\n";
 }
 
 
@@ -115,8 +120,8 @@ int main(int, char**) {
     events->addMKC(mousekeycombo); //Works!
     events->popMKC(mousekeycombo); //Works!
 
-    events->addMU(mouseup); //Works!
-    events->popMU();        //Works!
+    events->addME(MouseEvents::MOUSE_UP, mouseup); //Works!
+    events->popME(MouseEvents::MOUSE_UP);        //Works!
 
     events->addME(MouseEvents::L_DRAG, ldrag);     //Works!
     events->addME(MouseEvents::R_DRAG, rdrag);     //Works!
@@ -129,23 +134,30 @@ int main(int, char**) {
     events->addSE(scroll); //Works!
     events->popSE();       //Works!
 
-    events->addKEH(keyhandler); //Works!
-    events->popKEH();           //Works!
+    events->addKEH(KeyEvents::KEY_DOWN, keyhandler); //Works!
+    //events->popKEH(KeyEvents::KEY_DOWN);             //Works!
     
     win->setMaximized(false);
 
-	addUpdateFunc(update);
+	addUpdateFunc(win, update);
 
 	run();
-
-    quit();
     return 0;
 }
 
 #else
+
 #include <pybind11/functional.h>
 #include <pybind11/native_enum.h>
 #include <pybind11/stl.h>
+
+#include "documentation.h"
+
+inline void translateErr(obj type, const string& msg) {
+    obj err = type(msg);
+    err.attr("__cause__") = py::none();
+    PyErr_SetObject(type.ptr(), err.ptr());
+}
 
 PYBIND11_MODULE(_cpp, m) {
     m.attr("keys") = getKeys();
@@ -153,22 +165,75 @@ PYBIND11_MODULE(_cpp, m) {
     m.def("run", run);
 
     m.def("quit", quit);
-    m.def("update", updateAll);
     
     m.def("create_window", createWindow);
-    m.def("add_update_func", addUpdateFunc);
+    m.def("add_update_func", addUpdateFunc).doc();
     m.def("use_audio", useAudio);
+
+    py::native_enum<UpdateOrder>(m, "UpdateOrder", "enum.Enum")
+        .value("UPDATE_FIRST", UpdateOrder::UPDATE_FIRST)
+        .value("EVENTS_FIRST", UpdateOrder::EVENTS_FIRST)
+        .export_values()
+        .finalize();
+
+    m.def("set_update_order", setUpdateOrder, py::arg("update_order"));
+
+    Errs::Quit = py::register_exception<ProgramExit>(
+        m, "ProgramExit"
+    );
+    Errs::WinOpen = py::register_exception<WindowOpeningError>(
+        m, "WindowOpeningError", 
+        PyExc_RuntimeError
+    );
+    Errs::Arg = py::register_exception<ArgumentMismatchError>(
+        m, "ArgumentMismatchError", 
+        PyExc_TypeError
+    );
+    Errs::KHandle = py::register_exception<KeyHandlerExistsError>(
+        m, "KeyHandlerExistsError", 
+        PyExc_RuntimeError
+    );
+
+    py::register_exception_translator(
+        [](std::exception_ptr ptr) {
+            windows.clear();
+            SDL_Quit();
+            try {
+                if (ptr) std::rethrow_exception(ptr);
+            }
+            catch (ProgramExit&) {}
+            catch (TypeError& e) {
+                translateErr(Errs::Type, e.what());
+            }
+            catch (ArgumentMismatchError& e) {
+                translateErr(Errs::Arg, e.what());
+            }
+            catch (KeyHandlerExistsError& e) {
+                translateErr(Errs::KHandle, e.what());
+            }
+            catch (WindowOpeningError& e) {
+                translateErr(Errs::WinOpen, e.what());
+            }
+            catch (exception& e) {
+                translateErr(Errs::Runtime, e.what());
+            }
+        }
+    );
     
-    py::class_<Window>(m, "Window")
+    py::class_<Window>(m, "Window", "docstring")
         .def(py::init<string, int, int>())
         .def("destroy", &Window::destroy)
         //setter funcs
-        .def("set_resizable", &Window::setResizable)
-        .def("set_minimized", &Window::setMinimized)
-        .def("set_maximized", &Window::setMaximized)
+        .def("set_resizable", &Window::setResizable, py::arg("set") = true)
+        .def("set_minimized", &Window::setMinimized, py::arg("set") = true)
+        .def("set_maximized", &Window::setMaximized, py::arg("set") = true)
         //size funcs
-        .def("resize", &Window::resize)
-        .def("get_size", py::overload_cast<>(&Window::getSize))
+        .def("resize", &Window::resize, py::arg("new_width"), py::arg("new_height"))
+        .def("get_size", [](Window& win) {
+            int w, h;
+            win.getSize(&w, &h);
+            return make_pair(w, h);
+        })
         //drawing funcs
         .def(
             "set_color", 
@@ -179,33 +244,66 @@ PYBIND11_MODULE(_cpp, m) {
             py::arg("blue"),
             py::arg("alpha") = 255
         )
-        .def("point", &Window::point)
-        .def("line", &Window::line)
-        .def("fill_rect", &Window::fillRect)
-        .def("stroke_rect", &Window::strokeRect)
+        .def("point", &Window::point, py::arg("x"), py::arg("y"))
+        .def(
+            "draw_line", &Window::line
+            , py::arg("x1"), py::arg("y1")
+            , py::arg("x2"), py::arg("y2")
+        )
+        .def(
+            "fill_rect", &Window::fillRect, 
+            py::arg("x"), py::arg("y"), 
+            py::arg("width"), py::arg("height")
+        )
+        .def(
+            "stroke_rect", &Window::strokeRect,
+            py::arg("x"), py::arg("y"),
+            py::arg("width"), py::arg("height")
+        )
+        .def("save", &Window::save)
         .def("clear", &Window::clear)
         .def_readonly("id", &Window::id);
 
     py::class_<KeyCombination>(m, "KeyCombination")
-        .def(py::init<int, int, func>())
-        .def(py::init<int, int, int, func>());
+        .def(
+            py::init<int, int, func>(), 
+            py::arg("key1"), 
+            py::arg("key2"), 
+            py::arg("callback")
+        )
+        .def(
+            py::init<int, int, int, func>(), 
+            py::arg("key1"), 
+            py::arg("key2"), 
+            py::arg("key3"), 
+            py::arg("callback")
+        );
 
     py::class_<MouseKeyCombination>(m, "MouseKeyCombination")
-        .def(py::init<int, mousecall>());
+        .def(py::init<int, mousecall>(), py::arg("key"), py::arg("callback"));
 
-    py::native_enum<MouseEvents>(m, "MouseEvents", "enum.Enum")
+    py::native_enum<MouseEvents>(m, "MouseEvents", "enum.Enum", "All possible mouse events.")
         .value("L_CLICK", MouseEvents::L_CLICK)
+        .value("LEFT_CLICK", MouseEvents::L_CLICK)
         .value("R_CLICK", MouseEvents::R_CLICK)
+        .value("RIGHT_CLICK", MouseEvents::R_CLICK)
         .value("WHL_CLICK", MouseEvents::WHL_CLICK)
+        .value("WHEEL_CLICK", MouseEvents::WHL_CLICK)
         .value("L_DRAG", MouseEvents::L_DRAG)
+        .value("LEFT_DRAG", MouseEvents::L_DRAG)
         .value("R_DRAG", MouseEvents::R_DRAG)
+        .value("RIGHT_DRAG", MouseEvents::R_DRAG)
         .value("WHL_DRAG", MouseEvents::WHL_DRAG)
+        .value("WHEEL_DRAG", MouseEvents::WHL_DRAG)
+        .value("BACK_THUMB", MouseEvents::BACK_THUMB)
+        .value("FWD_THUMB", MouseEvents::FWD_THUMB)
+        .value("FORWARD_THUMB", MouseEvents::FWD_THUMB)
         .value("MOUSE_MOVE", MouseEvents::MOUSE_MOVE)
         .value("MOUSE_UP", MouseEvents::MOUSE_UP)
         .export_values()
         .finalize();
 
-    py::native_enum<KeyEvents>(m, "KeyEvents", "enum.Enum")
+    py::native_enum<KeyEvents>(m, "KeyEvents", "enum.Enum", "All possible key events.")
         .value("KEY_DOWN", KeyEvents::KEY_DOWN)
         .value("KEY_HOLD", KeyEvents::KEY_HOLD)
         .export_values()
@@ -214,30 +312,185 @@ PYBIND11_MODULE(_cpp, m) {
     using weh = WindowEventHandler;
     py::class_<weh>(m, "WindowEventHandler")
         //Add events
-        .def("add_mouse_event", py::overload_cast<MouseEvents, mousecall>(&weh::addME))
-        .def("add_mouse_event", py::overload_cast<MouseEvents, gr2s::func>(&weh::addMU))
-        .def("add_mouseup_event", py::overload_cast<gr2s::func>(&weh::addMU))
-        .def("add_utility_mouse_event", py::overload_cast<MouseEvents, mousecall, int>(&weh::addME))
-        .def("add_scroll_event", py::overload_cast<scrollcall>(&weh::addSE))
-        .def("add_utility_scroll_event", py::overload_cast<scrollcall, int>(&weh::addSE))
-        .def("add_key_event", py::overload_cast<KeyEvents, keycall, int>(&weh::addKE))
-        .def("add_utility_key_event", py::overload_cast<KeyEvents, keycall, int, int>(&weh::addKE))
-        .def("add_key_event_handler", &weh::addKEH)
-        .def("add_quit_event", &weh::addQE)
-        .def("add_key_combination", &weh::addKC)
-        .def("add_key_mouse_combination", &weh::addMKC)
+        .def(
+            "add_mouse_event",
+            [](weh& handler, MouseEvents type, py::function callback) {
+                int argCount = callback.attr("__code__").attr("co_argcount").cast<int>();
+                bool hasSelf = false;
+
+                if (!callback.attr("__self__").is_none()) {
+                    argCount--;
+                    hasSelf = true;
+                }
+
+                auto getSelf = [hasSelf]() {
+                    return hasSelf ? "self, " : "";
+                };
+                switch (argCount) {
+                case 0:
+                    handler.addME(type, [callback]() {
+                        callback();
+                    });
+                    break;
+                case 1:
+                    handler.addME(type, [callback](int x, int y) {
+                        callback(py::make_tuple(x, y));
+                    });
+                    break;
+                case 2:
+                    handler.addME(type, [callback](int x, int y) {
+                        callback(x, y);
+                    });
+                    break;
+                default:
+                    stringstream ss{};
+                    ss << "The callback for a mouse event must have parameters "
+                       << "of either (" << getSelf() << "x, y) or (" << getSelf() 
+                       << "coord). However, the callback has " << argCount + hasSelf
+                       << " arguments.";
+                    throw ArgumentMismatchError(ss.str().c_str());
+                }
+            },
+            py::arg("event_type"),
+            py::arg("callback")
+        )
+        .def(
+            "add_utility_mouse_event",
+            [](weh& handler, MouseEvents type, py::function callback, int uid) {
+                int argCount = callback.attr("__code__").attr("co_argcount").cast<int>();
+                bool hasSelf = false;
+
+                try {
+                    if (!callback.attr("__self__").is_none()) {
+                        argCount--;
+                        hasSelf = true;
+                    }
+                }
+                catch (py::error_already_set&) {}
+
+                auto getSelf = [hasSelf]() {
+                    return hasSelf ? "self, " : "";
+                    };
+                switch (argCount) {
+                case 1:
+                    handler.addME(type, [callback](int x, int y) {
+                        callback(py::make_tuple(x, y));
+                    }, uid);
+                    break;
+                case 2:
+                    handler.addME(type, [callback](int x, int y) {
+                        callback(x, y);
+                    }, uid);
+                    break;
+                default:
+                    stringstream ss{};
+                    ss << "The callback for a mouse event must have parameters "
+                        << "of either (" << getSelf() << "x, y) or (" << getSelf()
+                        << "coord). However, the callback has " << argCount + hasSelf
+                        << " arguments.";
+                    throw ArgumentMismatchError(ss.str().c_str());
+                }
+            },
+            py::arg("event_type"),
+            py::arg("callback"),
+            py::arg("utility_id")
+        )
+        .def(
+            "add_scroll_event", 
+            py::overload_cast<scrollcall>(&weh::addSE),
+            py::arg("callback")
+        )
+        .def(
+            "add_utility_scroll_event", 
+            py::overload_cast<scrollcall, int>(&weh::addSE),
+            py::arg("callback"),
+            py::arg("utility_id")
+        )
+        .def(
+            "add_key_event", 
+            py::overload_cast<KeyEvents, keycall, int>(&weh::addKE),
+            py::arg("event_type"),
+            py::arg("callback"),
+            py::arg("key")
+        )
+        .def(
+            "add_utility_key_event", 
+            py::overload_cast<KeyEvents, keycall, int, int>(&weh::addKE),
+            py::arg("event_type"),
+            py::arg("callback"),
+            py::arg("key"),
+            py::arg("utility_id")
+        )
+        .def(
+            "add_key_event_handler", &weh::addKEH, 
+            py::arg("event_type"),
+            py::arg("key_event_handler")
+        )
+        .def(
+            "add_quit_event", &weh::addQE, 
+            py::arg("key"), 
+            py::arg("callback")// = doNothing
+        )
+        .def(
+            "add_key_combination", &weh::addKC, 
+            py::arg("combo")
+        )
+        .def(
+            "add_mouse_key_combination", 
+            &weh::addMKC,
+            py::arg("combo")
+        )
 
         //Pop events
-        .def("pop_mouse_event", py::overload_cast<MouseEvents>(&weh::popME))
-        .def("pop_utility_mouse_event", py::overload_cast<MouseEvents, int>(&weh::popUME))
-        .def("pop_scroll_event", py::overload_cast<>(&weh::popSE))
-        .def("pop_utility_scroll_event", py::overload_cast<int>(&weh::popSE))
-        .def("pop_key_event", py::overload_cast<KeyEvents, int>(&weh::popKE))
-        .def("pop_utility_key_event", py::overload_cast<KeyEvents, int, int>(&weh::popKE))
-        .def("pop_key_event_handler", &weh::popKEH)
-        .def("pop_quit_event", &weh::popQE)
-        .def("pop_key_combination", &weh::popKC)
-        .def("pop_mouse_key_combination", &weh::popMKC);
+        .def(
+            "pop_mouse_event", 
+            py::overload_cast<MouseEvents>(&weh::popME),
+            py::arg("event_type")
+        )
+        .def(
+            "pop_utility_mouse_event", 
+            py::overload_cast<MouseEvents, int>(&weh::popUME),
+            py::arg("event_type"),
+            py::arg("utility_id")
+        )
+        .def(
+            "pop_scroll_event", 
+            py::overload_cast<>(&weh::popSE)
+        )
+        .def(
+            "pop_utility_scroll_event", 
+            py::overload_cast<int>(&weh::popSE),
+            py::arg("utility_id")
+        )
+        .def(
+            "pop_key_event", 
+            py::overload_cast<KeyEvents, int>(&weh::popKE),
+            py::arg("event_type"),
+            py::arg("key")
+        )
+        .def(
+            "pop_utility_key_event", 
+            py::overload_cast<KeyEvents, int, int>(&weh::popKE),
+            py::arg("event_type"),
+            py::arg("key"),
+            py::arg("utility_id")
+        )
+        .def(
+            "pop_key_event_handler", &weh::popKEH,
+            py::arg("event_type")
+        )
+        .def(
+            "pop_quit_event", &weh::popQE,
+            py::arg("key")
+        )
+        .def(
+            "pop_key_combination", &weh::popKC,
+            py::arg("combo")
+        )
+        .def(
+            "pop_mouse_key_combination", &weh::popMKC,
+            py::arg("combo")
+        );
 }
 
 #endif

@@ -28,8 +28,15 @@ MouseKeyCombination::MouseKeyCombination(int k, mousecall c) {
 	callback = c;
 }
 
-void MouseKeyCombination::operator()(pybind11::tuple coord) {
-	callback(coord);
+MouseKeyCombination::MouseKeyCombination(int k, func c) {
+	key = k;
+	callback = [c](int x, int y) {
+		c();
+	};
+}
+
+void MouseKeyCombination::operator()(int x, int y) {
+	callback(x, y);
 }
 
 bool MouseKeyCombination::operator==(MouseKeyCombination other) {

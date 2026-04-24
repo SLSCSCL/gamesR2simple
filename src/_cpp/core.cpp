@@ -5,6 +5,7 @@
 NAMESPACE
 
 std::vector<unique_ptr<Window>> windows;
+bool windowDestroyed = false;
 
 /*
 	Functions that do nothing - they are placeholders.
@@ -12,7 +13,17 @@ std::vector<unique_ptr<Window>> windows;
 
 void doNothing() {}
 void doNothingi(int a) {}
-void doNothingTup(py::tuple t) {}
+void doNothingii(int a, int b) {}
+
+/*
+	The quit() function stops the entire program.
+*/
+
+[[noreturn]] void quit() {
+	windows.clear();
+	SDL_Quit();
+	throw ProgramExit();
+}
 
 /*
 	The QuitEvent class. It just holds a QuitEvent.
@@ -51,15 +62,19 @@ WindowEventHandler::WindowEventHandler(Window* _win) :
 	ukeydown(make_shared<ukey>()),
 	ukeyhold(make_shared<ukey>()),
 	keycombos(make_shared<kcombos>()),
-	mousekeycombos(make_shared<mkcombos>())
+	mousekeycombos(make_shared<mkcombos>()),
+	umousemove(make_shared<umousecall>()),
+	umouseup(make_shared<umousecall>())
 {
 	scroll = doNothingi; 
-	mouseup = doNothing; 
-	mousemove = doNothingTup;
-	keyhandle = doNothingi;
+	mouseup = doNothingii; 
+	mousemove = doNothingii;
+	keydownhandler = doNothingi;
+	keyholdhandler = doNothingi;
 }
 
 void WindowEventHandler::addME(MouseEvents type, mousecall callback) {
+	//addMEHelp<mouse>(type, callback);
 	switch (type) {
 	case MouseEvents::L_CLICK:
 	case MouseEvents::R_CLICK:
@@ -75,26 +90,28 @@ void WindowEventHandler::addME(MouseEvents type, mousecall callback) {
 		mousemove = callback;
 		break;
 	case MouseEvents::MOUSE_UP:
-		throw ArgumentMismatchError("The mouseup callback should not recieve any parameters.");
+		mouseup = callback;
 		break;
 	case MouseEvents::BACK_THUMB:
-		break;
 	case MouseEvents::FWD_THUMB:
 		break;
 	default:
-		throw TypeError("The 'type' parameter must be of type gamesR2simple.MouseEvents!");
+		raise<TypeError>("The 'type' parameter must be of type gamesR2simple.MouseEvents!");
 	}
 }
 
-void WindowEventHandler::addMU(MouseEvents type, func callback) {
-	mouseup = callback;
-}
-
-void WindowEventHandler::addMU(func callback) {
-	mouseup = callback;
+void WindowEventHandler::addME(MouseEvents type, func callback) {
+	if (type != MouseEvents::MOUSE_UP)
+		raise<ArgumentMismatchError>(
+			"If a mouse event callback doesn't take parameters, it must be a mouseup event!"
+		);
+	mouseup = [callback](int x, int y) {
+		callback();
+	};
 }
 
 void WindowEventHandler::addME(MouseEvents type, mousecall callback, int uid) {
+	//addMEHelp<umouse>(type, callback, uid);
 	shared_ptr<umouse> events;
 	switch (type) {
 	case MouseEvents::L_CLICK:
@@ -112,9 +129,19 @@ void WindowEventHandler::addME(MouseEvents type, mousecall callback, int uid) {
 		events = umousethumb;
 		break;
 	default:
-		throw TypeError("The 'type' parameter must be of type gamesR2simple.MouseEvents!");
+		raise<TypeError>("The 'type' parameter must be of type gamesR2simple.MouseEvents!");
 	}
 	(*events)[uid][type] = callback;
+}
+
+void WindowEventHandler::addME(MouseEvents type, func callback, int uid) {
+	if (type != MouseEvents::MOUSE_UP)
+		raise<ArgumentMismatchError>(
+			"If a mouse event callback doesn't take parameters, it must be a mouseup event!"
+		);
+	(*umouseup)[uid] = [callback](int x, int y) {
+		callback();
+	};
 }
 
 void WindowEventHandler::addSE(scrollcall callback) {
@@ -135,7 +162,7 @@ void WindowEventHandler::addKE(KeyEvents type, keycall callback, int _key) {
 		events = keyhold;
 		break;
 	default:
-		throw TypeError("The 'type' parameter must be of type gamesR2simple.KeyEvents!");
+		raise<TypeError>("The 'type' parameter must be of type gamesR2simple.KeyEvents!");
 	}
 	(*events)[_key] = callback;
 }
@@ -150,16 +177,19 @@ void WindowEventHandler::addKE(KeyEvents type, keycall callback, int _key, int u
 		events = ukeyhold;
 		break;
 	default:
-		throw TypeError("The 'type' parameter must be of type gamesR2simple.KeyEvents!");
+		raise<TypeError>("The 'type' parameter must be of type gamesR2simple.KeyEvents!");
 	}
 	(*events)[uid][_key] = callback;
 }
 
-void WindowEventHandler::addKEH(keyhcall handle) {
-	if (keyhandler)
-		throw KeyHandlerExistsError("A key event handler has already been declared.");
-	keyhandler = true;
-	keyhandle = handle;
+void WindowEventHandler::addKEH(KeyEvents type, keyhcall handle) {
+	switch (type) {
+	case KeyEvents::KEY_DOWN:
+		keydownhandler = handle;
+		break;
+	case KeyEvents::KEY_HOLD:
+		keyholdhandler = handle;
+	}
 }
 
 void WindowEventHandler::addQE(int _key, keycall callback) {
@@ -192,8 +222,11 @@ void WindowEventHandler::popME(MouseEvents type) {
 	case MouseEvents::FWD_THUMB:
 		popItem(mousethumb, type);
 		break;
+	case MouseEvents::MOUSE_UP:
+		mouseup = doNothingii;
+		break;
 	default:
-		throw TypeError("The 'type' parameter must be of type gamesR2simple.MouseEvents!");
+		raise<TypeError>("The 'type' parameter must be of type gamesR2simple.MouseEvents!");
 	}
 }
 
@@ -214,10 +247,6 @@ void WindowEventHandler::popUME(MouseEvents type, int uid) {
 		popItem(&(*umousethumb)[uid], type);
 		break;
 	}
-}
-
-void WindowEventHandler::popMU() {
-	mouseup = doNothing;
 }
 
 void WindowEventHandler::popSE() {
@@ -250,9 +279,8 @@ void WindowEventHandler::popKE(KeyEvents type, int _key, int uid) {
 	}
 }
 
-void WindowEventHandler::popKEH() {
-	keyhandler = false;
-	keyhandle = doNothingi;
+void WindowEventHandler::popKEH(KeyEvents type) {
+	addKEH(type, doNothingi);
 }
 
 void WindowEventHandler::popQE(int _key) {
@@ -271,6 +299,8 @@ void WindowEventHandler::popMKC(MouseKeyCombination combo) {
 	The Window class acts as a wrapper for SDL_Window and Renderer.
 */
 
+bool inWinUpdate = false;
+
 void Window::construct() {
 	win = SDL_CreateWindow(name.c_str(), width, height, attr);
 	ren = SDL_CreateRenderer(win, nullptr);
@@ -278,10 +308,21 @@ void Window::construct() {
 }
 
 void Window::construct(int width_, int height_, string name_) {
-	width = width_;
-	height = height_;
+	width = realWidth = width_;
+	height = realHeight = height_;
 	name = name_;
 	construct();
+	constructBuffer();
+}
+
+void Window::constructBuffer() {
+	savedBuffer = SDL_CreateTexture(
+		ren,
+		SDL_PIXELFORMAT_RGBA8888,
+		SDL_TEXTUREACCESS_TARGET,
+		realWidth,
+		realHeight
+	);
 }
 
 void Window::destroySDLWin() {
@@ -298,12 +339,13 @@ Window::Window() : name(), handler(this) {
 }
 
 Window::~Window() {
+	SDL_DestroyTexture(savedBuffer);
 	destroySDLWin();
 }
 
 void Window::destroy() {
-	destroySDLWin();
 	destroyed = true;
+	windowDestroyed = true;
 }
 
 void Window::setBgColor(int r, int g, int b, int a) {
@@ -326,6 +368,7 @@ void Window::setMinimized(bool set) {
 	if (set) {
 		setResizable(true);
 		SDL_MinimizeWindow(win);
+		constructBuffer();
 	}
 }
 
@@ -333,25 +376,17 @@ void Window::setMaximized(bool set) {
 	if (set) {
 		setResizable(true);
 		SDL_MaximizeWindow(win);
+		constructBuffer();
 	}
 }
 
 void Window::resize(int newW, int newH) {
-	if (attr & SDL_WINDOW_RESIZABLE) {
-		win = SDL_CreateWindow(name.c_str(), newW, newH, attr);
-		ren = SDL_CreateRenderer(win, nullptr);
-		id = SDL_GetWindowID(win);
-	}
+	if (attr & SDL_WINDOW_RESIZABLE)
+		construct(newW, newH, name);
 }
 
 void Window::getSize(int* width, int* height) {
 	SDL_GetWindowSizeInPixels(win, width, height);
-}
-
-py::tuple Window::getSize() {
-	int w, h;
-	getSize(&w, &h);
-	return py::make_tuple(w, h);
 }
 
 void Window::setColor(int r, int g, int b, int a) {
@@ -359,32 +394,107 @@ void Window::setColor(int r, int g, int b, int a) {
 }
 
 void Window::point(int x, int y) {
-	SDL_RenderPoint(ren, x, y);
+	if (!inWinUpdate) {
+		Uint8 r, g, b, a;
+		SDL_GetRenderDrawColor(ren, &r, &g, &b, &a);
+		cache.push([=]() {
+			setColor(r, g, b, a);
+			point(x, y);
+		});
+	}
+	else
+		SDL_RenderPoint(ren, x, y);
 }
 
 void Window::line(int x1, int y1, int x2, int y2) {
-	SDL_RenderLine(ren, x1, y1, x2, y2);
+	if (!inWinUpdate) {
+		Uint8 r, g, b, a;
+		SDL_GetRenderDrawColor(ren, &r, &g, &b, &a);
+		cache.push([=]() {
+			setColor(r, g, b, a);
+			line(x1, y1, x2, y2);
+		});
+	}
+	else
+		SDL_RenderLine(ren, x1, y1, x2, y2);
 }
 
 void Window::fillRect(int x, int y, int width, int height) {
-	SDL_FRect r{};
-	r.x = x;
-	r.y = y;
-	r.w = width;
-	r.h = height;
-	SDL_RenderFillRect(ren, &r);
+	if (!inWinUpdate) {
+		Uint8 r, g, b, a;
+		SDL_GetRenderDrawColor(ren, &r, &g, &b, &a);
+		cache.push([=]() {
+			setColor(r, g, b, a);
+			fillRect(x, y, width, height);
+		});
+	}
+	else {
+		SDL_FRect r{};
+		r.x = x;
+		r.y = y;
+		r.w = width;
+		r.h = height;
+		SDL_RenderFillRect(ren, &r);
+	}
 }
 
 void Window::strokeRect(int x, int y, int width, int height) {
-	SDL_RenderLine(ren, x, y, x + width, y);                   // -------
-	SDL_RenderLine(ren, x, y + height, x, y);                  // |
-	SDL_RenderLine(ren, x + width, y, x + width, y + height);  //       |
-	SDL_RenderLine(ren, x + width, y + height, x, y + height); // -------
+	if (!inWinUpdate) {
+		cache.push([=]() {
+			strokeRect(x, y, width, height);
+		});
+	}
+	else {
+		SDL_RenderLine(ren, x, y, x + width, y);                   // -------
+		SDL_RenderLine(ren, x, y + height, x, y);                  // |
+		SDL_RenderLine(ren, x + width, y, x + width, y + height);  //       |
+		SDL_RenderLine(ren, x + width, y + height, x, y + height); // -------
+	}
+}
+
+void Window::dumpCache() {
+	while (!cache.empty()) {
+		cache.front()();
+		cache.pop();
+	}
+}
+
+void Window::save() {
+	saved = true;
+}
+
+void Window::updateSave() {
+	if (saved) {
+		SDL_Surface* surface = SDL_RenderReadPixels(ren, nullptr);
+		if (surface) {
+			SDL_Surface* converted = SDL_ConvertSurface(
+				surface,
+				SDL_PIXELFORMAT_RGBA8888
+			);
+
+			if (converted) {
+				SDL_UpdateTexture(
+					savedBuffer,
+					nullptr,
+					converted->pixels,
+					converted->pitch
+				);
+				SDL_DestroySurface(converted);
+			}
+
+			SDL_DestroySurface(surface);
+		}
+	}
 }
 
 void Window::clear() {
 	setColor(bgR, bgG, bgB, bgA);
 	SDL_RenderClear(ren);
+
+	if (saved) {
+		SDL_RenderTexture(ren, savedBuffer, nullptr, nullptr);
+		saved = false;
+	}
 }
 
 void Window::show() {
@@ -393,17 +503,6 @@ void Window::show() {
 
 WindowEventHandler* Window::getHandle() {
 	return &handler;
-}
-
-/*
-	The DialogWindow class creates a window for a
-	dialog box, like when you right click.
-*/
-
-DialogWindow::DialogWindow(string name_, int width_, int height_, Window* parent_) 
-	: parent(parent_) {
-	attr = SDL_WINDOW_POPUP_MENU;
-	construct(width_, height_, name_);
 }
 
 /*
@@ -422,16 +521,6 @@ winEventPair createWindow(string name, int width, int height) {
 	windows.push_back(move(win));
 	Window* winPtr = windows.back().get();
 	return make_pair(winPtr, winPtr->getHandle());
-}
-
-/*
-	The quit() function stops the entire program.
-*/
-
-void quit() {
-	windows.clear();
-	SDL_Quit();
-	_exit(0);
 }
 
 /*
@@ -466,33 +555,31 @@ void Events::checkMD(WindowEventHandler* handler, int x, int y, Uint8 btn) {
 		break;
 	}
 
-	py::tuple coord = py::make_tuple(x, y);
-
 	self->pressedBtns[btn] = true;
-
-	//Regular events
-	auto& list = handler->mousedown;
-	if (list->find(type) != list->end())
-		(*list)[type](coord);
 
 	//Utility events
 	for (auto& pair : *handler->umousedown)
 		if (pair.second.find(type) != pair.second.end())
-			pair.second[type](coord);
+			pair.second[type](x, y);
+
+	//Regular events
+	auto& list = handler->mousedown;
+	if (list->find(type) != list->end())
+		(*list)[type](x, y);
 
 	//Mouse-key combinations
 	for (MouseKeyCombination& combo : *handler->mousekeycombos)
 		if (self->heldKeys[combo.key])
-			combo(coord);
+			combo(x, y);
 }
 
 void Events::checkMM(WindowEventHandler* handler, int x, int y) {
-	handler->mousemove(py::make_tuple(x, y));
+	handler->mousemove(x, y);
 }
 
-void Events::checkMDrag(WindowEventHandler* handler, int x, int y) {
-	py::tuple coord = py::make_tuple(x, y);
+bool Events::checkMDrag(WindowEventHandler* handler, int x, int y) {
 	shared_ptr<mouse>& mousedrag = handler->mousedrag;
+	bool foundDragEvent = false;
 
 	MouseEvents type;
 	for (auto& btnPair : self->pressedBtns) {
@@ -511,20 +598,25 @@ void Events::checkMDrag(WindowEventHandler* handler, int x, int y) {
 			break;
 		}
 
-		if (mousedrag->find(type) != mousedrag->end())
-			(*mousedrag)[type](coord);
-
 		//Utility events
 		for (auto& pair : *handler->umousedrag)
-			if (btnPair.second && pair.second.find(type) != pair.second.end())
-				pair.second[type](coord);
+			if (btnPair.second && pair.second.find(type) != pair.second.end()) {
+				pair.second[type](x, y);
+				foundDragEvent = true;
+			}
+
+		if (mousedrag->find(type) != mousedrag->end()) {
+			(*mousedrag)[type](x, y);
+			foundDragEvent = true;
+		}
 	}
+	return foundDragEvent;
 }
 
 void Events::checkSE(WindowEventHandler* handler, int dir) {
-	handler->scroll(dir);
 	for (auto& pair : *handler->uscroll)
 		pair.second(dir);
+	handler->scroll(dir);
 }
 
 void Events::checkKD(WindowEventHandler* handler, SDL_Scancode keycode) {
@@ -532,7 +624,7 @@ void Events::checkKD(WindowEventHandler* handler, SDL_Scancode keycode) {
 	auto& keys = handler->keydown;
 	auto& quit = handler->quit;
 
-	handler->keyhandle(keycode);
+	handler->keydownhandler(keycode);
 
 	//Quit events
 	if (quit->find(keycode) != quit->end())
@@ -565,6 +657,7 @@ void Events::checkKH(WindowEventHandler* handler, bool u) {
 				(*events)[code]();
 			for (auto& pair : *handler->ukeyhold)
 				pair.second[code]();
+			handler->keyholdhandler(code);
 		}
 	}
 }
@@ -585,6 +678,11 @@ void Events::checkEvents() {
 		handler = winPtr->getHandle();
 
 		switch (e.type) {
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+			winPtr->realWidth = e.window.data1;
+			winPtr->realHeight = e.window.data2;
+			winPtr->constructBuffer();
+			break;
 		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
 			winPtr->destroy();
 			break;
@@ -596,11 +694,12 @@ void Events::checkEvents() {
 			break;
 		case SDL_EVENT_MOUSE_BUTTON_UP:
 			self->pressedBtns[e.button.button] = false;
-			handler->mouseup();
+			handler->mouseup(e.button.x, e.button.y);
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
-			self->checkMM(handler, e.motion.x, e.motion.y);
-			self->checkMDrag(handler, e.motion.x, e.motion.y);
+			//Make sure that we don't fire a mousemove event if the mouse is dragging
+			if (!self->checkMDrag(handler, e.motion.x, e.motion.y))
+				self->checkMM(handler, e.motion.x, e.motion.y);
 			break;
 		case SDL_EVENT_MOUSE_WHEEL:
 			self->checkSE(handler, e.wheel.integer_y);
@@ -622,24 +721,22 @@ void Events::checkEvents() {
 	}
 }
 
-std::vector<func> updateFuncs;
-
-void addUpdateFunc(func f) {
-	updateFuncs.push_back(f);
+void addUpdateFunc(Window* win, func f) {
+	win->update = f;
 }
 
-void updateAll() {
-	//Clear all windows
-	for (auto& win : windows)
-		win->clear();
-
-	//Update
-	for (auto& func : updateFuncs)
-		func();
-
-	//Show all windows
-	for(auto& win : windows)
-		win->show();
+UpdateOrder updateOrder = UpdateOrder::UPDATE_FIRST;
+void setUpdateOrder(UpdateOrder order) {
+	switch (static_cast<int>(order)) {
+	case 12:
+	case 13:
+		updateOrder = order;
+		break;
+	default:
+		raise<TypeError>(
+			"You must pass a value from the UpdateOrder enum to set the update order!"
+		);
+	}
 }
 
 END

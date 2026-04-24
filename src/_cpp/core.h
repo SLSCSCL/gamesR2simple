@@ -1,13 +1,15 @@
 ﻿#pragma once
+#ifndef GR2S_CORE
+#define GR2S_CORE
 #include <assert.h>
 #include <functional>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <queue>
 #include <string>
 #include <vector>
 
-#include <pybind11/pybind11.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
 
@@ -29,6 +31,7 @@ NAMESPACE
 
 //All possible mouse events are contained in this enum.
 enum class MouseEvents {
+	NONE = -1, //Only for use in core.cpp
 	MOUSE_MOVE,
 	MOUSE_UP,
 	L_CLICK,
@@ -38,12 +41,12 @@ enum class MouseEvents {
 	R_DRAG,
 	WHL_DRAG,
 	BACK_THUMB,
-	FWD_THUMB,
-	NONE //Only for use in core.cpp
+	FWD_THUMB
 };
 //All key events are contained here.
 enum class KeyEvents {
-	KEY_DOWN,
+	//Continue from where MouseEvents left off, so that Python can't send a MouseEvents value
+	KEY_DOWN = 10,
 	KEY_HOLD
 };
 
@@ -85,10 +88,14 @@ class Window;
 //Functions that, surprisingly, do nothing.
 void doNothing();
 void doNothingi(int);
-void doNothingTup(py::tuple t);
+void doNothingii(int, int);
+
+[[noreturn]] void quit();
 
 //This holds all window instances. The Window class automatically adds and removes itself.
 extern std::vector<unique_ptr<Window>> windows;
+//Has a window been removed?
+extern bool windowDestroyed;
 
 //Function types
 typedef function<void(int)> scrollcall, keyhcall; //scroll event callback
@@ -126,7 +133,8 @@ public:
 
 //Types for event handling
 typedef map<MouseEvents, mousecall> mouse;	  //mouse events
-typedef map<int, mouse> umouse;				  //mouse events for utilities
+typedef map<int, mouse> umouse;               //mouse events for utilities
+typedef map<int, mousecall> umousecall;       //mousecall for utilities
 typedef map<int, scrollcall> Uscroll;		  //scroll events for utilities
 typedef map<int, keycall> key;				  //key events
 typedef map<int, key> ukey;					  //key events for utilities
@@ -136,11 +144,57 @@ typedef vector<MouseKeyCombination> mkcombos; //mouse key combinations
 
 //A class that manages the adding and removing of events for a specific window.
 class WindowEventHandler {
+private:
+	template<class EventsType>
+	void addMEHelp(MouseEvents type, mousecall callback, int uid = -1) {
+		shared_ptr<EventsType> events;
+
+		switch (type) {
+		case MouseEvents::L_CLICK:
+		case MouseEvents::R_CLICK:
+		case MouseEvents::WHL_CLICK:
+			//Error when EventsType is umouse
+			if (is_same_v<EventsType, mouse>) events = mousedown;
+			//Error when EventsType is mouse
+			else events = umousedown; 
+			break;
+		case MouseEvents::L_DRAG:
+		case MouseEvents::R_DRAG:
+		case MouseEvents::WHL_DRAG:
+			//Error when EventsType is umouse
+			if (uid == -1) events = mousedrag;
+			//Error when EventsType is mouse
+			else events = umousedrag;
+			break;
+		case MouseEvents::BACK_THUMB:
+		case MouseEvents::FWD_THUMB:
+			//Error when EventsType is umouse
+			if (uid == -1) events = mousethumb;
+			//Error when EventsType is mouse
+			else events = umousethumb;
+			break;
+		case MouseEvents::MOUSE_MOVE:
+			if (uid == -1) mousemove = callback;
+			else (*umousemove)[uid] = callback;
+			return;
+		case MouseEvents::MOUSE_UP:
+			if (uid == -1) mouseup = callback;
+			else (*umouseup)[uid] = callback;
+			return;
+		default:
+			raise<TypeError>("The 'type' parameter must be of type gamesR2simple.MouseEvents!");
+		}
+
+		/*
+			If uid is provided, it means that we are adding a 
+			utility mouse event. Thus, we provide the uid to the 
+			map. This way we can get the element from type in both
+			cases.
+		*/
+		((uid != -1) ? (*events)[uid] : (*events))[type] = callback;
+	}
 public:
 	Window* win;
-
-	//Has a key handler been added?
-	bool keyhandler = false;
 
 	/*
 		Why the shared_ptrs? Well, on the old, old computer I developed 
@@ -153,16 +207,20 @@ public:
 	//Normal events
 	shared_ptr<mouse> mousedown, mousedrag, mousethumb;     //mousedown, drag, and thumb events
 	mousecall mousemove;                                    //the mousemove event
-	func mouseup;                                           //the mouseup event
+	mousecall mouseup;                                      //the mouseup event
 	scrollcall scroll;                                      //the scroll event
 	shared_ptr<key> keydown, keyhold;                       //keydown and keyhold events
-	keyhcall keyhandle;                                     //the keyhandle function - if there is one.
+	//the keyhandling function for keydown events - if there is one.
+	keyhcall keydownhandler;
+	keyhcall keyholdhandler;
 	shared_ptr<Quit> quit;                                  //quit events for the window
 	shared_ptr<kcombos> keycombos;							//key combinations
 	shared_ptr<mkcombos> mousekeycombos;					//mouse key combinations
 
 	//Utility events
 	shared_ptr<umouse> umousedown, umousedrag, umousethumb; //utility mousedown, drag, and thumb events
+	shared_ptr<umousecall> umousemove;                      //utility mousemove events
+	shared_ptr<umousecall> umouseup;                        //utility mouseup events
 	shared_ptr<Uscroll> uscroll;                            //utility scroll events
 	shared_ptr<ukey> ukeydown, ukeyhold;                    //utility keydown and keyhold events
 
@@ -185,28 +243,14 @@ public:
 	void addME(MouseEvents type, mousecall callback);
 
 	/*
-		Add a mouseup event.
+		Add a mouse event.
 
-		\param MouseEvents type: the type of event. Useless, really,
-								 but it's there so that in Python you
-								 can call self.events.add_mouse_event(
-									MouseEvents.MOUSE_UP, 
-									<function object>
-								)
+		\param MouseEvents type: the type of event.
 		\param func callback: the callback function.
 
 		\returns void
 	*/
-	void addMU(MouseEvents type, func callback);
-
-	/*
-		Add a mouseup event.
-
-		\param func callback: the callback function.
-
-		\returns void
-	*/
-	void addMU(func callback);
+	void addME(MouseEvents type, func callback);
 
 	/*
 		Add a utility mouse event.
@@ -218,6 +262,17 @@ public:
 		\returns void
 	*/
 	void addME(MouseEvents type, mousecall callback, int uid);
+
+	/*
+		Add a utility mouse event.
+
+		\param MouseEvents type: the type of event.
+		\param func callback: the callback function.
+		\param int uid: the id of the utility.
+
+		\returns void
+	*/
+	void addME(MouseEvents type, func callback, int uid);
 
 	/*
 		Add a scroll event.
@@ -244,7 +299,7 @@ public:
 		\param KeyEvents type: the type of event.
 		\param keycall callback: the callback function.
 		\param int _key: the static_cast<int>(SDL_Scancode::SCANCODE).
-		                 A pybind11::dict containing these scancodes 
+		                 A std::map containing these scancodes 
 						 can be found in KeyCodes.h.
 
 		\returns void
@@ -257,7 +312,7 @@ public:
 		\param KeyEvents type: the type of event.
 		\param keycall callback: the callback function.
 		\param int _key: the static_cast<int>(SDL_Scancode::SCANCODE).
-		                 A pybind11::dict containing these scancodes 
+		                 A std::map containing these scancodes 
 						 can be found in KeyCodes.h.
 		\param int uid: the id of the utility.
 
@@ -272,13 +327,13 @@ public:
 
 		\returns void
 	*/
-	void addKEH(keyhcall handle);
+	void addKEH(KeyEvents type, keyhcall handle);
 
 	/*
 		Add a quit event.
 
 		\param int _key: the static_cast<int>(SDL_Scancode::SCANCODE).
-						 A pybind11::dict containing these scancodes 
+						 A std::map containing these scancodes 
 						 can be found in KeyCodes.h.
 		\param keycall callback: the callback function. Defaults to 
 		                         doNothing() which, surprisingly, does nothing.
@@ -327,13 +382,6 @@ public:
 	void popUME(MouseEvents type, int uid);
 
 	/*
-		Remove the mouseup event.
-
-		\returns void
-	*/
-	void popMU();
-
-	/*
 		Remove a scroll event.
 
 		\returns void
@@ -354,7 +402,7 @@ public:
 
 		\param KeyEvents type: the type of event.
 		\param int _key: the static_cast<int>(SDL_Scancode::SCANCODE).
-		                 A pybind11::dict containing these scancodes
+		                 A std::map containing these scancodes
 						 can be found in KeyCodes.h.
 
 		\returns void
@@ -366,7 +414,7 @@ public:
 
 		\param KeyEvents type: the type of event.
 		\param int _key: the static_cast<int>(SDL_Scancode::SCANCODE).
-		                 A pybind11::dict containing these scancodes
+		                 A std::map containing these scancodes
 						 can be found in KeyCodes.h.
 		\param int uid: the id of the utility.
 
@@ -379,13 +427,13 @@ public:
 
 		\returns void
 	*/
-	void popKEH();
+	void popKEH(KeyEvents type);
 
 	/*
 		Remove a key event.
 
 		\param int _key: the static_cast<int>(SDL_Scancode::SCANCODE).
-		                 A pybind11::dict containing these scancodes
+		                 A std::map containing these scancodes
 						 can be found in KeyCodes.h.
 
 		\returns void
@@ -411,6 +459,8 @@ public:
 	void popMKC(MouseKeyCombination combo);
 };
 
+extern bool inWinUpdate;
+
 //This is the Window class. It handles resizing and drawing.
 class Window {
 protected:
@@ -432,6 +482,12 @@ protected:
 	Uint8 attr = 0;
 	int bgR = 0, bgG = 0, bgB = 0, bgA = 255;
 
+	//Is there a saved screen?
+	bool saved = false;
+	SDL_Texture* savedBuffer;
+
+	queue<func> cache;
+
 	//Construct the window. This is the same every time.
 	void construct();
 	//Construct the window for the first time.
@@ -439,10 +495,15 @@ protected:
 
 	void destroySDLWin();
 public:
+	int realWidth = 0, realHeight = 0;
 	//The SDL_Window's ID
 	SDL_WindowID id = 0;
 
 	bool destroyed = false;
+
+	func update;
+
+	void constructBuffer();
 
 	/*
 		Construct the Window immediately.
@@ -519,7 +580,7 @@ public:
 	//Size getters
 
 	/*
-		Get the size of the window, C++ version.
+		Get the size of the window.
 
 		\param int* width: a pointer to the width variable.
 
@@ -528,13 +589,6 @@ public:
 		\returns void
 	*/
 	void getSize(int* width, int* height);
-
-	/*
-		Get the size of the window, Python version.
-
-		\returns pybind11::tuple
-	*/
-	py::tuple getSize();
 
 	//Drawing functions
 
@@ -549,20 +603,16 @@ public:
 	void fillRect(int x, int y, int width, int height);
 	void strokeRect(int x, int y, int width, int height);
 
+	void dumpCache();
+
+	void save();
+	void updateSave();
 	//Clear the current frame
 	void clear();
 	void show();
 
 	WindowEventHandler* getHandle();
 };
-
-class DialogWindow : public Window {
-private:
-	Window* parent;
-public:
-	DialogWindow(string name_, int width_, int height_, Window* parent);
-};
-
 
 typedef pair<Window*, WindowEventHandler*> winEventPair;
 /*
@@ -582,9 +632,6 @@ winEventPair createWindow(
 	int height = 100
 );
 
-void quit();
-
-
 class Events {
 private:
 	map<Uint8, bool> pressedBtns;
@@ -595,7 +642,7 @@ private:
 
 	static void checkMD(WindowEventHandler* handler, int x, int y, Uint8 btn);
 	static void checkMM(WindowEventHandler* handler, int x, int y);
-	static void checkMDrag(WindowEventHandler* handler, int x, int y);
+	static bool checkMDrag(WindowEventHandler* handler, int x, int y);
 	static void checkSE(WindowEventHandler* handler, int dir);
 	static void checkKD(WindowEventHandler* handler, SDL_Scancode keycode);
 	static void checkKH(WindowEventHandler* handler, bool u = false);
@@ -605,10 +652,16 @@ public:
 	static void checkEvents();
 };
 
-extern std::vector<func> updateFuncs;
+void addUpdateFunc(Window* win, func f);
 
-void addUpdateFunc(func f);
+enum class UpdateOrder {
+	UPDATE_FIRST = 12,
+	EVENTS_FIRST
+};
 
-void updateAll();
+extern UpdateOrder updateOrder;
+
+void setUpdateOrder(UpdateOrder order);
 
 END
+#endif
