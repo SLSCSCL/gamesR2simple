@@ -10,7 +10,9 @@ __all__ = [
     "BaseGameWindow",
     "run",
     "MouseEvents",
-    "KeyEvents"
+    "KeyEvents",
+    "KeyCombination",
+    "MouseKeyCombination"
 ]
 
 _run = run #Overwritten
@@ -23,13 +25,30 @@ class BaseGameWindow(ABC):
         BaseGameWindow._game_windows.append(cls)
     
     def __init__(self):
+        arg_count = self.update.__code__.co_argcount
+        if self.update.__self__ is not None:
+            arg_count -= 1
+
+        self._UPDATE_NEEDS_DT = arg_count == 1
+        
         self.active = True
         self.setup()
 
     def _get_update(self):
-        return self.update
+        def update():
+            if self.active:
+                if self._UPDATE_NEEDS_DT:
+                    return self.update(dt)
+                self.update()
+        
+        return update
     
-    def create_window(self, name, width = 200, height = 100):
+    def create_window(
+        self,
+        name = "gamesR2simple window",
+        width = 200,
+        height = 100
+    ):
         self.window, self.events = create_window(name, width, height)
         self.draw = Draw(self.window)
 
@@ -37,18 +56,12 @@ class BaseGameWindow(ABC):
         self.window.destroy()
         self.active = False
 
-    @abstractmethod
-    def setup(self):
-        pass
-
-    @abstractmethod
-    def update(self):
-        pass
-
-def run():
+def run(fps = 60):
+    start()
+    
     game_windows = [cls() for cls in BaseGameWindow._game_windows]
     for game in game_windows:
         if game.active:
-            add_update_func(game._get_update())
+            add_update_func(game.window, game._get_update())
 
     _run()
