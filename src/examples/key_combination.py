@@ -1,20 +1,24 @@
-from gamesR2simple import BaseGame, keys
+from gamesR2simple import BaseGameWindow, run, keys, KeyCombination, quit
 
-class Game(BaseGame):
+class Game(BaseGameWindow):
     def setup(self):
+        self.create_window("Key combination events example", 800, 400)
         self.events.add_key_combination(
-            keys["Left-hand ctrl"],
-            keys["F4"],
-            self.destroy
+            KeyCombination(
+                keys["Left Ctrl"],
+                keys["F4"],
+                quit
+            )
         )
         self.events.add_key_combination(
-            keys["Right-hand ctrl"],
-            keys["F4"],
-            self.destroy
+            KeyCombination(
+                keys["Right Ctrl"],
+                keys["F4"],
+                quit
+            )
         )
 
     def update(self):
         pass
 
-if __name__ == "__main__":
-    game = Game()
+run()

@@ -1,21 +1,16 @@
-from gamesR2simple import BaseGame, keys
+from gamesR2simple import BaseGameWindow, run
 from gamesR2simple.areas import CircleArea
 
-class Game(BaseGame):
+class Game(BaseGameWindow):
     circle = CircleArea(50, 50, 50)
-    def __init__(self):
-        super().__init__()
-        self.events.add_quit_event(keys["Escape"])
-        self.run()
+    def setup(self):
+        self.create_window("Circle area example", 800, 400)
 
     def update(self):
-        self.draw.fill_style = (255, 255, 0)
-        for point in self.circle.points:
-            self.draw.fill_rect(point[0], point[1], 1, 1)
+        self.window.set_color(255, 255, 0)
+        self.draw.area(self.circle)
 
-        self.draw.fill_style = (255, 0, 0)
-        for point in self.circle.outline:
-            self.draw.fill_rect(point[0], point[1], 1, 1)
+        self.window.set_color(255, 0, 0)
+        self.draw.outline_area(self.circle)
 
-if __name__ == "__main__":
-    game = Game()
+run()

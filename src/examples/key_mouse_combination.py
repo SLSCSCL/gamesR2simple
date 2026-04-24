@@ -1,11 +1,13 @@
-from gamesR2simple import BaseGame, keys
+from gamesR2simple import BaseGameWindow, run, keys, MouseKeyCombination, quit
 
-class Game(BaseGame):
+class Game(BaseGameWindow):
     def setup(self):
-        self.events.add_mouse_key_combination(keys["x"], self.destroy)
+        self.create_window("Mouse-key event combination example", 800, 400)
+        self.events.add_mouse_key_combination(
+            MouseKeyCombination(keys["x"], quit)
+        )
         
     def update(self):
         pass
 
-if __name__ == "__main__":
-    game = Game()
+run()

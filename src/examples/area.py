@@ -1,10 +1,7 @@
-"""
-A very simple game demonstratig the use of gamesR2simple.areas.Area
-"""
-from gamesR2simple import BaseGame, keys
+from gamesR2simple import BaseGameWindow, keys, run
 from gamesR2simple.areas import Area, Lines, Line
 
-class Game(BaseGame):
+class Game(BaseGameWindow):
     area = Area(
         Lines(
             Line(25, 0, 0, 50),  # /
@@ -15,17 +12,16 @@ class Game(BaseGame):
             Line(100, 50, 75, 100) # /
         )
     )
+    
     def setup(self):
-        self.events.add_quit_event(keys["Escape"])
+        self.create_window("Area example", 800, 400)
         
     def update(self):
-        self.draw.fill_style = (255, 255, 0)
-        self.draw.fill_area(self.area)
+        self.window.set_color(255, 255, 0)
+        self.draw.area(self.area)
 
-        self.draw.fill_style = (255, 0, 0)
+        self.window.set_color(255, 0, 0)
         for point in self.area.outline:
-            self.draw.fill_rect(point[0], point[1], 1, 1)
+            self.window.point(point[0], point[1])
 
-if __name__ == "__main__":
-    game = Game()
-
+run()
