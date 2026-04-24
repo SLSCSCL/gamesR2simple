@@ -1,99 +1,34 @@
-from ._base_option_bar import BaseOptionBar, q
-from ._err_msgs import o_b_errs
-from .errors import (
-    MappingKeyError,
-    ActionNotNoneError,
-    OptionTypeNotImageError,
-    NoExistingOptionError,
-    NoExistingActionError
-)
+from ._base_option_bar import BaseOptionBar
 
-class OptionBar(BaseOptionBar):
-    def m_k_err(self):
-        q()
-        raise MappingKeyError(
-            o_b_errs["mapping_key_err"]
-        ) from None
-    
-    def draw(self, draw, item):
-        try: #is it filled?
-            draw.fill_style = item["fill_style"]
-        except KeyError: #is it stroked?
-            try:
-                draw.stroke_style = item["stroke_style"]
-            except KeyError:
-                try: # it must be an image
-                    draw.image(item["image"], item["x"], item["y"])
-                except KeyError:
-                    #the programmer is mucking about - teach'em
-                    self.m_k_err()
-            else:
-                try: #is it a stroked rect?
-                    draw.stroke_rect(
-                        item["x"],
-                        item["y"],
-                        item["width"],
-                        item["height"]
-                    )
-                except KeyError:
-                    try: #it must be an area
-                        draw.stroke_area(item["area"])
-                    except KeyError:
-                        #the programmer is mucking about - teach'em
-                        self.m_k_err()
-        else:
-            try: #is it a filled rect?
-                draw.fill_rect(
-                    item["x"],
-                    item["y"],
-                    item["width"],
-                    item["height"]
-                )
-            except KeyError:
-                try: #it must be an area
-                    draw.fill_area(item["area"])
-                except KeyError:
-                    #the programmer is mucking about - teach'em
-                    self.m_k_err()
+from .. import MouseEvents
+
+from ..areas._base_area import BaseArea
+from ..areas import RectArea
 
 class SameOptionsBar(BaseOptionBar):
-    def __init__(self, mapping, option_type, action = None):
-        super().__init__(mapping)
-        valid = {
-            "actions": ("fill", "stroke", None),
-            "o_types": ("rect", "area", "image")
-        }
-        if action not in valid["actions"]:
-            q()
-            raise NoExistingActionError(
-                o_b_errs["no_action_err"].format(action)
-            )
-        elif option_type not in valid["o_types"]:
-            q()
-            raise NoExistingActionError(
-                o_b_errs["no_o_type_err"].format(option_type)
-            )
-        del valid
+    def __init__(self, *mapping, item_type, starting_index = 0):
+        if len(mapping) == 1:
+            mapping = mapping[0]
+        super().__init__(mapping, starting_index)
         
-        if option_type == "image":
-            if action != None:
-                q()
-                raise ActionNotNoneError(
-                    o_b_errs["action_not_none_err"]
-                )
-            self._action = "image"
-            self._color = None
-            return
-        elif action == None and option_type != "image":
-            raise OptionTypeNotImage(
-                o_b_errs["o_type_not_image"]
-            )
-
-        self._action = f"{option_type}_{action}"
-        self._color = f"{option_type}_style"
+        if issubclass(item_type, BaseArea):
+            self._left_click = lambda coord: \
+                self._area_collision(coord, MouseEvents.L_CLICK)
+            self._right_click = lambda coord: \
+                self._area_collision(coord, MouseEvents.R_CLICK)
+            self._wheel_click = lambda coord: \
+                self._area_collision(coord, MouseEvents.WHL_CLICK)
             
-    def draw(self, draw, item):
-        if self._color:
-            eval(f"draw.{self._color} = item['{self._color}']")
-            eval(f"item.pop({self._color})")
-        eval(f"draw.{self._action}(**item)")
+            self.draw = self._draw_areas
+        #image support soon
+
+    def _area_collision(self, coord, event):
+        for i in range(len(self._mapping)):
+            if self._mapping[i]["area"].collision(coord):
+                self.i = i
+                self._click_callbacks[event](self._get_param())
+
+    def _draw_areas(self, set_color, draw_area):
+        for item in self._mapping:
+            set_color(*item["color"])
+            draw_area(item["area"])
