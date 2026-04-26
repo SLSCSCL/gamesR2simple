@@ -312,11 +312,11 @@ void Window::construct(int width_, int height_, string name_) {
 	height = realHeight = height_;
 	name = name_;
 	construct();
-	constructBuffer();
+	constructBuffers();
 }
 
-void Window::constructBuffer() {
-	savedBuffer = SDL_CreateTexture(
+void Window::constructBuffer(SDL_Texture*& tex) {
+	tex = SDL_CreateTexture(
 		ren,
 		SDL_PIXELFORMAT_RGBA8888,
 		SDL_TEXTUREACCESS_TARGET,
@@ -328,6 +328,11 @@ void Window::constructBuffer() {
 void Window::destroySDLWin() {
 	SDL_DestroyWindow(win);
 	SDL_DestroyRenderer(ren);
+}
+
+void Window::constructBuffers() {
+	constructBuffer(canvas);
+	constructBuffer(savedBuffer);
 }
 
 Window::Window(string name_, int width_, int height_) : handler(this) {
@@ -368,7 +373,7 @@ void Window::setMinimized(bool set) {
 	if (set) {
 		setResizable(true);
 		SDL_MinimizeWindow(win);
-		constructBuffer();
+		constructBuffers();
 	}
 }
 
@@ -376,7 +381,7 @@ void Window::setMaximized(bool set) {
 	if (set) {
 		setResizable(true);
 		SDL_MaximizeWindow(win);
-		constructBuffer();
+		constructBuffers();
 	}
 }
 
@@ -389,18 +394,21 @@ void Window::getSize(int* width, int* height) {
 	SDL_GetWindowSizeInPixels(win, width, height);
 }
 
-void Window::setColor(int r, int g, int b, int a) {
-	SDL_SetRenderDrawColor(ren, r, g, b, a);
+void Window::setColor(int _r, int _g, int _b, int _a) {
+	SDL_SetRenderDrawColor(ren, _r, _g, _b, _a);
+	r = _r;
+	g = _g;
+	b = _b;
+	a = _a;
 }
 
 void Window::point(int x, int y) {
 	if (!inWinUpdate) {
-		Uint8 r, g, b, a;
-		SDL_GetRenderDrawColor(ren, &r, &g, &b, &a);
-		cache.push([=]() {
-			setColor(r, g, b, a);
-			point(x, y);
-		});
+		DrawCommand draw{ r, g, b, a };
+		draw.type = ShapeType::POINT;
+		draw.point = { x, y };
+
+		cache.push(draw);
 	}
 	else
 		SDL_RenderPoint(ren, x, y);
@@ -408,12 +416,11 @@ void Window::point(int x, int y) {
 
 void Window::line(int x1, int y1, int x2, int y2) {
 	if (!inWinUpdate) {
-		Uint8 r, g, b, a;
-		SDL_GetRenderDrawColor(ren, &r, &g, &b, &a);
-		cache.push([=]() {
-			setColor(r, g, b, a);
-			line(x1, y1, x2, y2);
-		});
+		DrawCommand draw{ r, g, b, a };
+		draw.type = ShapeType::LINE;
+		draw.line = { x1, y1, x2, y2 };
+
+		cache.push(draw);
 	}
 	else
 		SDL_RenderLine(ren, x1, y1, x2, y2);
@@ -421,12 +428,11 @@ void Window::line(int x1, int y1, int x2, int y2) {
 
 void Window::fillRect(int x, int y, int width, int height) {
 	if (!inWinUpdate) {
-		Uint8 r, g, b, a;
-		SDL_GetRenderDrawColor(ren, &r, &g, &b, &a);
-		cache.push([=]() {
-			setColor(r, g, b, a);
-			fillRect(x, y, width, height);
-		});
+		DrawCommand draw{ r, g, b, a };
+		draw.type = ShapeType::FILL_RECT;
+		draw.rect = { x, y, width, height };
+
+		cache.push(draw);
 	}
 	else {
 		SDL_FRect r{};
@@ -440,9 +446,11 @@ void Window::fillRect(int x, int y, int width, int height) {
 
 void Window::strokeRect(int x, int y, int width, int height) {
 	if (!inWinUpdate) {
-		cache.push([=]() {
-			strokeRect(x, y, width, height);
-		});
+		DrawCommand draw{ r, g, b, a };
+		draw.type = ShapeType::STROKE_RECT;
+		draw.rect = { x, y, width, height };
+
+		cache.push(draw);
 	}
 	else {
 		SDL_RenderLine(ren, x, y, x + width, y);                   // -------
@@ -453,51 +461,61 @@ void Window::strokeRect(int x, int y, int width, int height) {
 }
 
 void Window::dumpCache() {
+	DrawCommand* cmd;
 	while (!cache.empty()) {
-		cache.front()();
+		cmd = &cache.front();
+		setColor(cmd->r, cmd->g, cmd->b, cmd->a);
+		switch (cmd->type) {
+		case ShapeType::POINT:
+			point(cmd->point.x, cmd->point.y);
+			break;
+		case ShapeType::LINE:
+			line(cmd->line.x1, cmd->line.y1, cmd->line.x2, cmd->line.y2);
+			break;
+		case ShapeType::FILL_RECT:
+			fillRect(cmd->rect.x, cmd->rect.y, cmd->rect.w, cmd->rect.h);
+			break;
+		case ShapeType::STROKE_RECT:
+			strokeRect(cmd->rect.x, cmd->rect.y, cmd->rect.w, cmd->rect.h);
+			break;
+		case ShapeType::FILL_TRI:
+			//Not supported yet
+			break;
+		case ShapeType::STROKE_TRI:
+			//Not supported yet
+			break;
+		}
 		cache.pop();
 	}
 }
 
 void Window::save() {
-	saved = true;
+	saveFrame = true;
 }
 
 void Window::updateSave() {
-	if (saved) {
-		SDL_Surface* surface = SDL_RenderReadPixels(ren, nullptr);
-		if (surface) {
-			SDL_Surface* converted = SDL_ConvertSurface(
-				surface,
-				SDL_PIXELFORMAT_RGBA8888
-			);
-
-			if (converted) {
-				SDL_UpdateTexture(
-					savedBuffer,
-					nullptr,
-					converted->pixels,
-					converted->pitch
-				);
-				SDL_DestroySurface(converted);
-			}
-
-			SDL_DestroySurface(surface);
-		}
+	if (saveFrame) {
+		SDL_SetRenderTarget(ren, savedBuffer);
+		SDL_RenderTexture(ren, canvas, nullptr, nullptr);
+		saveFrame = false;
+		savedFrame = true;
 	}
 }
 
 void Window::clear() {
+	SDL_SetRenderTarget(ren, canvas);
 	setColor(bgR, bgG, bgB, bgA);
 	SDL_RenderClear(ren);
 
-	if (saved) {
+	if (savedFrame) {
 		SDL_RenderTexture(ren, savedBuffer, nullptr, nullptr);
-		saved = false;
+		savedFrame = false;
 	}
 }
 
 void Window::show() {
+	SDL_SetRenderTarget(ren, nullptr);
+	SDL_RenderTexture(ren, canvas, nullptr, nullptr);
 	SDL_RenderPresent(ren);
 }
 
@@ -681,7 +699,7 @@ void Events::checkEvents() {
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
 			winPtr->realWidth = e.window.data1;
 			winPtr->realHeight = e.window.data2;
-			winPtr->constructBuffer();
+			winPtr->constructBuffers();
 			break;
 		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
 			winPtr->destroy();

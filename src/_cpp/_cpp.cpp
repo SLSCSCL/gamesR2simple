@@ -223,6 +223,15 @@ PYBIND11_MODULE(_cpp, m) {
     py::class_<Window>(m, "Window", "docstring")
         .def(py::init<string, int, int>())
         .def("destroy", &Window::destroy)
+        .def(
+            "set_bg_color",
+            &Window::setBgColor,
+            "Set the background color.",
+            py::arg("red"),
+            py::arg("green"),
+            py::arg("blue"),
+            py::arg("alpha") = 255
+        )
         //setter funcs
         .def("set_resizable", &Window::setResizable, py::arg("set") = true)
         .def("set_minimized", &Window::setMinimized, py::arg("set") = true)
@@ -236,10 +245,10 @@ PYBIND11_MODULE(_cpp, m) {
         })
         //drawing funcs
         .def(
-            "set_color", 
+            "set_color",
             &Window::setColor,
             "Set the drawing color.",
-            py::arg("red"), 
+            py::arg("red"),
             py::arg("green"),
             py::arg("blue"),
             py::arg("alpha") = 255

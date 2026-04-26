@@ -1,9 +1,9 @@
 ﻿#pragma once
 #ifndef GR2S_CORE
 #define GR2S_CORE
+
 #include <assert.h>
 #include <functional>
-#include <iostream>
 #include <map>
 #include <memory>
 #include <queue>
@@ -17,6 +17,7 @@
 #include "Errors.h"
 #include "KeyCodes.h"
 #include "macro.h"
+#include "Shapes.h"
 
 using namespace std;
 namespace py = pybind11;
@@ -481,17 +482,22 @@ protected:
 	int width = 0, height = 0;
 	Uint8 attr = 0;
 	int bgR = 0, bgG = 0, bgB = 0, bgA = 255;
+	int r, g, b, a;
 
 	//Is there a saved screen?
-	bool saved = false;
+	bool saveFrame = false;
+	bool savedFrame = false;
+	SDL_Texture* canvas;
 	SDL_Texture* savedBuffer;
 
-	queue<func> cache;
+	queue<DrawCommand> cache;
 
 	//Construct the window. This is the same every time.
 	void construct();
 	//Construct the window for the first time.
 	void construct(int width_, int height_, string name_);
+
+	void constructBuffer(SDL_Texture*& tex);
 
 	void destroySDLWin();
 public:
@@ -503,7 +509,7 @@ public:
 
 	func update;
 
-	void constructBuffer();
+	void constructBuffers();
 
 	/*
 		Construct the Window immediately.
