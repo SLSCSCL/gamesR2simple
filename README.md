@@ -28,7 +28,8 @@ run()
 ```
 ## Core Features
 - ### Areas
-    Areas are simple, pure-Python shapes that define a certain region on the coordinate plane. They're useful as bounding-boxes, or just shapes drawn to the screen. I have one warning: do not continuously create or update areas (well, RectArea *might* be fine, depending on the context - but still, be careful!)
+    Areas are simple, pure-Python shapes that define a certain region on the coordinate plane. They're useful as bounding-boxes, or just shapes drawn to the screen.
+    ⚠️Warning: do not continuously create or update areas (well, RectArea *might* be fine, depending on the context - but still, be careful!)
 - ### Utilities
     Utilities are pure-Python implementations of graphical elements, such as buttons or sliders. These are still pretty limited, as the library is still under development, but more are coming.
 
