@@ -1,18 +1,25 @@
 # gamesR2simple
-A Python library to make it easier to write games.
-# Important
-This library is still under development for version 1, and is not complete. However, suggestions are welcome, and I will try my best to implement them!
+A beginner-friendly Python library for making games.
+# 🚧 Status: WIP
+This library is still under development (pre-version 1), so things are still evolving. That said, suggestions are ***always*** welcome, and I will do my best to implement them!
 ## Installation
-For most devices, you'll install with either `pip install gamesR2simple` or `pip3 install gamesR2simple`, depending on the OS.
-## Basic example
+Installing with pip for Windows: 
+```bash
+pip install gamesR2simple
+```
+For MacOS and Linux: 
+```bash
+pip3 install gamesR2simple
+```
+## Quick example: Hello, World!
 ```Python
 """hello_world.pyw"""
 from gamesR2simple import BaseGameWindow, run
 
 class Game(BaseGameWindow):
-    #Never define __init__ - that's what setup() is for
+    #Don't define __init__ — use setup() instead
     def setup(self):
-        self.create_window("Hello World!", 800, 400) #All parameters are optional
+        self.create_window("Hello, World!", 800, 400) #All parameters are optional
         
     def update(self):
         pass
@@ -21,13 +28,13 @@ run()
 ```
 ## Core Features
 - ### Areas
-    Areas are a nice way to create bounding boxes, and can be drawn to the screen as shapes. However, I do not recommend continuously creating or updating any areas except RectArea - but still, be careful!
+    Areas are simple, pure-Python shapes that define a certain region on the coordinate plane. They're useful as bounding-boxes, or just shapes drawn to the screen. I have one warning: do not continuously create or update areas (well, RectArea *might* be fine, depending on the context - but still, be careful!)
 - ### Utilities
-    Utilities are pure-Python implementations of graphical elements, such as option bars or sliders. Currently, they are rather limited as the library is still under development.
+    Utilities are pure-Python implementations of graphical elements, such as buttons or sliders. These are still pretty limited, as the library is still under development, but more are coming.
 
 ## Contributing
-I am a solo developer, and as such, I may not be able to think of every feature needed on my own. So I welcome feedback and suggestions! If you do have feedback, open an issue. 
-As a side note: I do not want this repository to be overwhelmed with pull requests, so please refrain from doing so unless you have a major change or idea.
+This is currently a solo project, so outside ideas will be incredibly helpful. If you have feedback, or have an idea for a new feature, 1) open an issue, and 2) describe what you'd like to see! 
+I reserve pull requests for major or breaking changes, so to keep things manageable, smaller ideas should be discussed in issues.
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
