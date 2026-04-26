@@ -1,6 +1,6 @@
 # gamesR2simple
 A beginner-friendly Python library for making games.
-# 🚧 Status: WIP
+# Status: 🚧WIP🚧
 This library is still under development (pre-version 1), so things are still evolving. That said, suggestions are ***always*** welcome, and I will do my best to implement them!
 ## Installation
 Installing with pip for Windows: 
