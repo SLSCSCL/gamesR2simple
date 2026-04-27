@@ -3,7 +3,7 @@ A beginner-friendly Python library for making games.
 # Status: 🚧WIP🚧
 This library is still under development (pre-version 1), so things are still evolving. That said, suggestions are ***always*** welcome, and I will do my best to implement them!
 ## Installation
-Installing with pip for Windows: 
+When this library is published, this will be how you install with pip for Windows: 
 ```bash
 pip install gamesR2simple
 ```
@@ -11,6 +11,7 @@ For MacOS and Linux:
 ```bash
 pip3 install gamesR2simple
 ```
+For now, just fork the repository.
 ## Quick example: Hello, World!
 ```Python
 """hello_world.pyw"""
