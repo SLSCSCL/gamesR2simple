@@ -1,4 +1,4 @@
-from ._base_area import BaseArea, q
+from ._base_area import BaseArea
 from ._operators import Operators
 
 class RoundRectArea(BaseArea, Operators):

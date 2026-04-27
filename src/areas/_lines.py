@@ -1,5 +1,4 @@
-from .._math_consts import EPSILON
-from .._error import Error
+
 
 class Line:
     def __init__(self, x1, y1, x2, y2):
@@ -10,8 +9,8 @@ class Line:
         self.calculate()
 
     def calculate(self):
-        #The x2 + EPSILON is to prevent a DivisionByZeroError
-        self.m = (self.y2 - self.y1) / ((self.x2 + EPSILON) - self.x1)
+        #The x2 + 0.0001 is to prevent a DivisionByZeroError
+        self.m = (self.y2 - self.y1) / ((self.x2 + 0.0001) - self.x1)
         self.b = self.y1 - self.m * self.x1
 
     def __repr__(self):
@@ -35,7 +34,7 @@ class Lines(list):
         for line in lines:
             if type(line) != Line:
                 q()
-                raise Error.new(TypeError)(
+                raise TypeError(
                     "All items in the first argument to Lines.__init__ must be of type Line"
                 )
             self.append(line)
@@ -44,5 +43,5 @@ class Lines(list):
         l = [line for line in self if line.y1 <= y and line.y2 >= y]
         if l:
             return l[0].get_x(y)
-        raise Error.new(ValueError)(f"No line that contains a y of {y}")
+        raise ValueError(f"No line that contains a y of {y}")
 

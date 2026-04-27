@@ -1,31 +1,31 @@
-from ._base_area import BaseArea, q
+from ._base_area import BaseArea
 from ._operators import Operators
 
 class CircleArea(BaseArea, Operators):
-    def __init__(self, center_x, center_y, r, anchor="center"):
+    def __init__(self, center_x, center_y, radius, anchor="center"):
         if anchor == "topleft":
-            center_x += r
-            center_y += r
+            center_x += radius
+            center_y += radius
         
         super().__init__(center_x, center_y)
-        self._r = r
+        self.r = radius
         self._calculate()
 
     def _get_x_y(self):
-        r_squared = self._r * self._r
-        for y in range(self._y - self._r, self._y + self._r + 1):
-            dy = y - self._y
+        r_squared = self.r * self.r
+        for y in range(self.y - self.r, self.y + self.r + 1):
+            dy = y - self.y
             dx_limit = int((r_squared - dy * dy) ** 0.5)
-            for x in range(self._x - dx_limit, self._x + dx_limit + 1):
+            for x in range(self.x - dx_limit, self.x + dx_limit + 1):
                 yield x, y
 
     def _get_outline_x_y(self):
         x = 0
-        y = self._r
-        d = 1 - self._r  # Initial decision parameter
+        y = self.r
+        d = 1 - self.r  # Initial decision parameter
 
-        cx = self._x
-        cy = self._y
+        cx = self.x
+        cy = self.y
 
         while x <= y:
             # 8-way symmetry

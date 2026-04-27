@@ -1,4 +1,4 @@
-from ._base_area import BaseArea, q
+from ._base_area import BaseArea
 
 #Operators has to be defined in this file to avoid an ImportError
 #due to a circular import - BaseArea should have the class Operators , but it then
