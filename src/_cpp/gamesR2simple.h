@@ -1,5 +1,6 @@
 #pragma once
-#include <pybind11/embed.h>
+#include <SDL3_ttf/SDL_ttf.h>
+
 #include "core.h"
 
 NAMESPACE

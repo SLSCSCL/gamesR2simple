@@ -166,7 +166,7 @@ PYBIND11_MODULE(_cpp, m) {
 
     m.def("quit", quit);
     
-    m.def("create_window", createWindow);
+    m.def("createWindow", createWindow);
     m.def("add_update_func", addUpdateFunc).doc();
     m.def("use_audio", useAudio);
 

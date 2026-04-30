@@ -18,13 +18,16 @@ setup(
             include_dirs = [
                 pybind11.get_include(),
                 ".",
-                r"C:\Users\MyPrezWappa\Documents\SDL3\SDL-release-3.2.20\out\install\x64-Debug\include"
+                "libs/SDL3/include",
+                "libs/SDL3_ttf/include"
             ],
             library_dirs = [
-                r"C:\Users\MyPrezWappa\Documents\SDL3\SDL-release-3.2.20\out\install\x64-Debug\lib"
+                "libs/SDL3/lib",
+                "libs/SDL3_ttf/lib"
             ],
             libraries = [
-                "SDL3"
+                "SDL3",
+                "SDL3_ttf"
             ],
             language = "c++",
             extra_compile_args = ["/std:c++17"]

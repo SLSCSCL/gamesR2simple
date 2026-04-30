@@ -9,10 +9,12 @@ void useAudio() {
 }
 
 void start() {
-    int count = 0;
-    while (!SDL_Init(sdlAttr) && count != 1000)
-        count++;
-    if (count == 1000) {
+    int sdlCount = 0, ttfCount = 0;
+    while (!SDL_Init(sdlAttr) && sdlCount != 1000)
+        sdlCount++;
+	while (!TTF_Init() && ttfCount != 1000)
+		ttfCount++;
+    if (sdlCount == 1000 || ttfCount == 1000) {
         throw WindowOpeningError(
             string(
                 "Could not initialize everything. For nerds, here is the SDL error:\n%s", 
