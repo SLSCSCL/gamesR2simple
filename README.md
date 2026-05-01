@@ -14,7 +14,7 @@ pip3 install gamesR2simple
 For now, just fork the repository.
 ## Quick example: Hello, World!
 ```Python
-"""hello_world.pyw"""
+"""hello_world.pyw - .pyw because this doesn't require a console"""
 from gamesR2simple import BaseGameWindow, run
 
 class Game(BaseGameWindow):
