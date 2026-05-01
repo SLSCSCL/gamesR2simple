@@ -1,10 +1,10 @@
-from gamesR2simple import BaseGameWindow, run, keys, MouseKeyCombination, quit
+from gamesR2simple import BaseGameWindow, run, keys, MouseKeyCombination
 
 class Game(BaseGameWindow):
     def setup(self):
         self.create_window("Mouse-key event combination example", 800, 400)
         self.events.add_mouse_key_combination(
-            MouseKeyCombination(keys["x"], quit)
+            MouseKeyCombination(keys["x"], lambda x, y: print("x-click"))
         )
         
     def update(self):
