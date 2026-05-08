@@ -9,3 +9,6 @@ default = true
 
 [smells.function_parameters]
 threshold = 5
+
+[[exclude]]
+file_patterns = ["src/_cpp/libs/**"] #Ignore all SDL files
