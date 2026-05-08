@@ -2,12 +2,12 @@
 
 #ifndef CPP_TESTING
 #define USING_PYBIND11
+#include <pybind11.h>
+namespace py = pybind11;
 #endif
 
 #include "gamesR2simple.h"
 using namespace gr2s;
-namespace py = pybind11;
-
 
 #ifdef CPP_TESTING
 #include <iostream>
