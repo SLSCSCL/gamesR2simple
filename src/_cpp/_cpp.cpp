@@ -1,18 +1,23 @@
 //#define CPP_TESTING
 
 #ifndef CPP_TESTING
-#define USING_PYBIND11
-#include <pybind11.h>
+#define USING_PYTHON
+#define PYBIND11_DETAILED_ERROR_MESSAGES
+#include <pybind11/pybind11.h>
 namespace py = pybind11;
 #endif
 
 #include "gamesR2simple.h"
 using namespace gr2s;
 
+
 #ifdef CPP_TESTING
 #include <iostream>
 #include <sstream>
+
 #include <SDL3/SDL_main.h>
+
+using namespace std;
 
 string getCoord(int x, int y) {
     stringstream ss{};
@@ -56,7 +61,6 @@ void whldrag(int x, int y) {
     cout << "Mouse is being whl-dragged! Now at " << getCoord(x, y) << "!\n";
 }
 
-
 void scroll(int dx) {
     cout << "Scrolled " << (dx < 0 ? "down " : "up ") << dx << "!\n";
 }
@@ -89,8 +93,6 @@ void update() {
 
 int main(int, char**) {
     start();
-    
-	py::scoped_interpreter guard{};
 
     keyMap keys = getKeys();
 
@@ -146,12 +148,22 @@ int main(int, char**) {
 }
 
 #else
+#include <exception>
+#include <iostream>
+#include <string>
+using namespace std;
 
 #include <pybind11/functional.h>
 #include <pybind11/native_enum.h>
 #include <pybind11/stl.h>
 
 #include "documentation.h"
+
+template<class Err>
+inline void registerErr(py::module_ m, obj& err, const char* name, const char* doc, PyObject* parent = PyExc_Exception) {
+    err = py::register_exception<Err>(m, name, parent);
+    err.doc() = doc;
+}
 
 inline void translateErr(obj type, const string& msg) {
     obj err = type(msg);
@@ -162,36 +174,34 @@ inline void translateErr(obj type, const string& msg) {
 PYBIND11_MODULE(_cpp, m) {
     m.attr("keys") = getKeys();
     m.def("start", start);
-    m.def("run", run);
+    m.def("run_", run);
 
-    m.def("quit", quit);
+    m.def("quit_", quit);
     
     m.def("createWindow", createWindow);
-    m.def("add_update_func", addUpdateFunc).doc();
-    m.def("use_audio", useAudio);
+    m.def("win_num", []() { return windows.size(); });
+    m.def("add_update_func", addUpdateFunc);
 
-    py::native_enum<UpdateOrder>(m, "UpdateOrder", "enum.Enum")
-        .value("UPDATE_FIRST", UpdateOrder::UPDATE_FIRST)
-        .value("EVENTS_FIRST", UpdateOrder::EVENTS_FIRST)
+    py::native_enum<UpdateOrder>(m, "UpdateOrder", "enum.Enum", "Used to set the update order.")
+        .value("UPDATE_FIRST", UpdateOrder::UPDATE_FIRST, "Call update() first, then handle events. This is the default.")
+        .value("EVENTS_FIRST", UpdateOrder::EVENTS_FIRST, "Handle the events first, then call update().")
         .export_values()
         .finalize();
 
-    m.def("set_update_order", setUpdateOrder, py::arg("update_order"));
+    m.def("set_update_order", setUpdateOrder, py::arg("update_order")).doc() = "Set the update order.";
 
-    Errs::Quit = py::register_exception<ProgramExit>(
-        m, "ProgramExit"
-    );
-    Errs::WinOpen = py::register_exception<WindowOpeningError>(
-        m, "WindowOpeningError", 
+    registerErr<ProgramExit>(m, Errs::Quit, "ProgramExit", "");
+    registerErr<SDLInitError>(
+        m, Errs::SDLInit, 
+        "SDLInitError", 
+        "What happens if SDL can't initialize?", 
         PyExc_RuntimeError
     );
-    Errs::Arg = py::register_exception<ArgumentMismatchError>(
-        m, "ArgumentMismatchError", 
+    registerErr<ArgumentMismatchError>(
+        m, Errs::Arg, 
+        "ArgumentMismatchError", 
+        "Invalid number of arguments", 
         PyExc_TypeError
-    );
-    Errs::KHandle = py::register_exception<KeyHandlerExistsError>(
-        m, "KeyHandlerExistsError", 
-        PyExc_RuntimeError
     );
 
     py::register_exception_translator(
@@ -208,11 +218,8 @@ PYBIND11_MODULE(_cpp, m) {
             catch (ArgumentMismatchError& e) {
                 translateErr(Errs::Arg, e.what());
             }
-            catch (KeyHandlerExistsError& e) {
-                translateErr(Errs::KHandle, e.what());
-            }
-            catch (WindowOpeningError& e) {
-                translateErr(Errs::WinOpen, e.what());
+            catch (SDLInitError& e) {
+                translateErr(Errs::SDLInit, e.what());
             }
             catch (exception& e) {
                 translateErr(Errs::Runtime, e.what());
@@ -220,29 +227,54 @@ PYBIND11_MODULE(_cpp, m) {
         }
     );
     
-    py::class_<Window>(m, "Window", "docstring")
+    py::class_<Window>(
+        m, "Window", 
+        "The Window class serves as a wrapper for SDL_Window and SDL_Renderer.\n"
+        "Of course, I had to make sure it provides a simple interface!"
+    )
         .def(py::init<string, int, int>())
-        .def("destroy", &Window::destroy)
+        .def("destroy", &Window::destroy, "Destroy the window.")
         .def(
             "set_bg_color",
             &Window::setBgColor,
-            "Set the background color.",
+            "Set the background color. This also overrides the behavior of save().",
             py::arg("red"),
             py::arg("green"),
             py::arg("blue"),
             py::arg("alpha") = 255
         )
         //setter funcs
-        .def("set_resizable", &Window::setResizable, py::arg("set") = true)
-        .def("set_minimized", &Window::setMinimized, py::arg("set") = true)
-        .def("set_maximized", &Window::setMaximized, py::arg("set") = true)
+        .def(
+            "set_resizable", 
+            &Window::setResizable, 
+            "Make the window resizable. This is automatically called when you maximize or minimize the window.",
+            py::arg("set") = true
+        )
+        .def(
+            "set_minimized", 
+            &Window::setMinimized,
+            "Minimize the window.",
+            py::arg("set") = true
+        )
+        .def(
+            "set_maximized", 
+            &Window::setMaximized,
+            "Maximize the window",
+            py::arg("set") = true
+        )
         //size funcs
-        .def("resize", &Window::resize, py::arg("new_width"), py::arg("new_height"))
+        .def(
+            "resize", 
+            &Window::resize,
+            "Resize the window.",
+            py::arg("new_width"), 
+            py::arg("new_height")
+        )
         .def("get_size", [](Window& win) {
             int w, h;
             win.getSize(&w, &h);
             return make_pair(w, h);
-        })
+        }, "Get the size of the window. Returns (width, height).")
         //drawing funcs
         .def(
             "set_color",
@@ -253,43 +285,74 @@ PYBIND11_MODULE(_cpp, m) {
             py::arg("blue"),
             py::arg("alpha") = 255
         )
-        .def("point", &Window::point, py::arg("x"), py::arg("y"))
         .def(
-            "draw_line", &Window::line
-            , py::arg("x1"), py::arg("y1")
-            , py::arg("x2"), py::arg("y2")
+            "point", 
+            &Window::point,
+            "Draw a point at (x, y)",
+            py::arg("x"), 
+            py::arg("y")
+        )
+        .def(
+            "draw_line", &Window::line, 
+            "Draw a line from (x1, y1) to (x2, y2)",
+            py::arg("x1"), py::arg("y1"), 
+            py::arg("x2"), py::arg("y2")
         )
         .def(
             "fill_rect", &Window::fillRect, 
+            "Draw a filled rectangle at (x, y)",
             py::arg("x"), py::arg("y"), 
             py::arg("width"), py::arg("height")
         )
         .def(
             "stroke_rect", &Window::strokeRect,
+            "Draw the outline of a rectangle at (x, y)",
             py::arg("x"), py::arg("y"),
             py::arg("width"), py::arg("height")
         )
-        .def("save", &Window::save)
-        .def("clear", &Window::clear)
-        .def_readonly("id", &Window::id);
+        .def(
+            "save", 
+            &Window::save, 
+            "Save the window to become the background for the next frame. "  
+            "This behavior is overriden if set_bg_color() is ever called "
+            "in the same frame."
+        )
+        .def("clear", &Window::clear, "Clear the window.")
+        .def_readonly("id", &Window::id, "The SDL ID of the window. Can be useful for debugging?")
+        .def_readwrite(
+            "update", 
+            &Window::update, 
+            "The update function for this window. If you're doing this: \"class Game(BaseGameWindow)\" "
+            "then you don't need to worry about setting this to anything - BaseGameWindow does it for "
+            "you in __init__()."
+        );
 
-    py::class_<KeyCombination>(m, "KeyCombination")
+    py::class_<KeyCombination>(m, "KeyCombination", "A combination of keys pressed together - like keyboard shortcuts")
         .def(
             py::init<int, int, func>(), 
+            "Create a key combination with two keys, like Ctrl+C",
             py::arg("key1"), 
             py::arg("key2"), 
             py::arg("callback")
         )
         .def(
-            py::init<int, int, int, func>(), 
+            py::init<int, int, int, func>(),
+            "Create a key combination with three keys, like Ctrl+Alt+Delete",
             py::arg("key1"), 
             py::arg("key2"), 
             py::arg("key3"), 
             py::arg("callback")
         );
 
-    py::class_<MouseKeyCombination>(m, "MouseKeyCombination")
-        .def(py::init<int, mousecall>(), py::arg("key"), py::arg("callback"));
+    py::class_<MouseKeyCombination>(m, "MouseKeyCombination", "A combination that fires when you hold a key and click")
+        .def(
+            py::init<int, mousecall>(),
+            "Create a mouse-key combination",
+            py::arg("key"), 
+            py::arg("callback")
+        );
+
+    m.def("do_nothing", doNothing);
 
     py::native_enum<MouseEvents>(m, "MouseEvents", "enum.Enum", "All possible mouse events.")
         .value("L_CLICK", MouseEvents::L_CLICK)
@@ -327,10 +390,12 @@ PYBIND11_MODULE(_cpp, m) {
                 int argCount = callback.attr("__code__").attr("co_argcount").cast<int>();
                 bool hasSelf = false;
 
-                if (!callback.attr("__self__").is_none()) {
-                    argCount--;
-                    hasSelf = true;
-                }
+                try {
+                    if (!callback.attr("__self__").is_none()) {
+                        argCount--;
+                        hasSelf = true;
+                    }
+                } catch (py::error_already_set&) {}
 
                 auto getSelf = [hasSelf]() {
                     return hasSelf ? "self, " : "";
@@ -436,9 +501,10 @@ PYBIND11_MODULE(_cpp, m) {
             py::arg("key_event_handler")
         )
         .def(
-            "add_quit_event", &weh::addQE, 
+            "add_quit_event", &weh::addQE,
+            "Adds a quit event for a certain key that destroys the window",
             py::arg("key"), 
-            py::arg("callback")// = doNothing
+            py::arg("callback") = py::cpp_function(doNothing)
         )
         .def(
             "add_key_combination", &weh::addKC, 

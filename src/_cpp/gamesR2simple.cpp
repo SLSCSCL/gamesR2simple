@@ -2,28 +2,30 @@
 
 NAMESPACE
 
-unsigned int sdlAttr = SDL_INIT_VIDEO;
-
-void useAudio() {
-    sdlAttr |= SDL_INIT_AUDIO;
+// The quit() function stops the entire program.
+[[noreturn]] void quit() {
+    windows.clear();
+    SDL_Quit();
+    TTF_Quit();
+    raise<ProgramExit>("");
 }
 
+unsigned int sdlAttr = SDL_INIT_VIDEO | SDL_INIT_AUDIO;
+
 void start() {
-    int sdlCount = 0, ttfCount = 0;
-    while (!SDL_Init(sdlAttr) && sdlCount != 1000)
-        sdlCount++;
-	while (!TTF_Init() && ttfCount != 1000)
-		ttfCount++;
-    if (sdlCount == 1000 || ttfCount == 1000) {
-        throw WindowOpeningError(
-            string(
-                "Could not initialize everything. For nerds, here is the SDL error:\n%s", 
+    if (!SDL_Init(sdlAttr)) {
+        raise<SDLInitError>(
+            std::string(
+                "Could not initialize SDL. For nerds, here is the SDL error:\n%s", 
                 SDL_GetError()
             ).c_str()
         );
-    }
+	}
+    if (!TTF_Init()) {
+        SDL_Quit();
+        raise<SDLInitError>("Could not initialize SDL_ttf.");
+	}
 }
-
 
 void run() {
     keyMap keys = getKeys();
@@ -46,7 +48,6 @@ void run() {
                 inWinUpdate = false;
 
                 //Show all windows
-                win->updateSave();
 				win->show();
             }
         }
@@ -54,6 +55,9 @@ void run() {
             break;
         }
         catch (...) {
+            windows.clear();
+            SDL_Quit();
+            TTF_Quit();
             throw;
         }
         
@@ -61,13 +65,34 @@ void run() {
             //Actually destroy the destroyed windows
             windows.erase(
                 remove_if(windows.begin(), windows.end(),
-                    [](const unique_ptr<Window>& w) {
+                    [](const std::unique_ptr<Window>& w) {
                         return w->destroyed;
                     }),
                 windows.end()
             );
             windowDestroyed = false;
         }
+    }
+
+    SDL_Quit();
+    TTF_Quit();
+}
+
+void addUpdateFunc(Window* win, func f) {
+    win->update = f;
+}
+
+UpdateOrder updateOrder = UpdateOrder::UPDATE_FIRST;
+void setUpdateOrder(UpdateOrder order) {
+    switch (order) {
+    case UpdateOrder::UPDATE_FIRST:
+    case UpdateOrder::EVENTS_FIRST:
+        updateOrder = order;
+        break;
+    default:
+        raise<TypeError>(
+            "You must pass a value from the UpdateOrder enum to set the update order!"
+        );
     }
 }
 

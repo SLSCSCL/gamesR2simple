@@ -2,51 +2,51 @@
 #include <exception>
 #include <string>
 #include "macro.h"
-using namespace std;
 
 NAMESPACE
 
-#ifdef USING_PYBIND11
+#ifdef USING_PYTHON
 #include <pybind11/pybind11.h>
+#define PYERR(err) py::reinterpret_borrow<obj>(err)
+
 namespace py = pybind11;
 
 typedef py::object obj;
 struct Errs {
-    inline static obj Type = py::reinterpret_borrow<obj>(PyExc_TypeError);
-    inline static obj Runtime = py::reinterpret_borrow<obj>(PyExc_RuntimeError);
-    inline static obj Quit;
-    inline static obj WinOpen;
+    inline static obj Type = PYERR(PyExc_TypeError);
+    inline static obj Runtime = PYERR(PyExc_RuntimeError);
+    inline static obj Quit = PYERR(PyExc_Exception);
+    inline static obj SDLInit;
     inline static obj Arg;
-    inline static obj KHandle;
 };
+
 #endif
 
 #define inherit : public Error {using Error::Error;}
 
-class Error : public exception {using std::exception::exception;};
-class WindowOpeningError inherit;
+class Error : public std::exception {using std::exception::exception;};
+class SDLInitError inherit;
 class ArgumentMismatchError inherit;
-class KeyHandlerExistsError inherit;
 class TypeError inherit;
 
 class ProgramExit inherit;
 
 template<class Err>
 [[noreturn]] void raise(const char* msg) {
-#ifdef USING_PYBIND11
+#ifdef USING_PYTHON
     obj errTy;
 
     if constexpr (is_same_v<Err, TypeError>) {
         errTy = Errs::Type;
     }
-    else if constexpr (is_same_v<Err, WindowOpeningError>) {
-        errTy = Errs::WinOpen;
+    else if constexpr (is_same_v<Err, SDLInitError>) {
+        errTy = Errs::SDLInit;
     }
     else if constexpr (is_same_v<Err, ArgumentMismatchError>) {
         errTy = Errs::Arg;
     }
-    else if constexpr (is_same_v<Err, KeyHandlerExistsError>) {
-        errTy = Errs::KHandle;
+    else if constexpr (is_same_v < Err, ProgramExit) {
+        errTy = Errs::Quit;
     }
     else {
         errTy = Errs::Runtime;
