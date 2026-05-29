@@ -20,7 +20,7 @@ from gamesR2simple import BaseGameWindow, run
 class Game(BaseGameWindow):
     #Don't define __init__ — use setup() instead
     def setup(self):
-        self.create_window("Hello, World!", 800, 400) #All parameters are optional
+        self.create_window("Hello, World!", 800, 600) #All parameters are optional - name, width, height
         
     def update(self):
         pass
